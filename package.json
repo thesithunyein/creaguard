@@ -12,6 +12,7 @@
   "dependencies": {
     "@animocabrands/minds-client-lib": "^0.1.3",
     "@upstash/redis": "^1.38.2",
+    "@vercel/functions": "^3.9.3",
     "next": "^15.3.4",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
