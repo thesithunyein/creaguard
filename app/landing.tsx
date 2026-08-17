@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
-import { Icon } from "./icons";
+import { BrandIcon, Icon } from "./icons";
 
 const FULL_TEXT = "Creator Safety That Remembers Context -- Not Just Rules.";
 const SPLIT_AT = 42;
@@ -44,7 +44,13 @@ const ICONS: IconSpec[] = [
   { icon: "eye", angle: 320, radius: 399, size: 58, glow: "#A3E635", delay: 2.3 },
 ];
 
-const PLATFORMS = ["YouTube", "Discord", "Telegram", "Instagram", "Twitch"];
+const PLATFORMS = [
+  { id: "youtube", label: "YouTube" },
+  { id: "discord", label: "Discord" },
+  { id: "telegram", label: "Telegram" },
+  { id: "instagram", label: "Instagram" },
+  { id: "twitch", label: "Twitch" },
+];
 
 function useCountUp(target: number, durationMs = 2000, startDelay = 1200) {
   const [value, setValue] = useState(0);
@@ -276,8 +282,9 @@ export function LandingPage() {
             {[0, 1, 2, 3].map((group) => (
               <div className="ln-ticker-group" key={group}>
                 {PLATFORMS.map((platform) => (
-                  <span key={`${group}-${platform}`} className="ln-ticker-logo">
-                    {platform}
+                  <span key={`${group}-${platform.id}`} className="ln-ticker-logo">
+                    <BrandIcon name={platform.id} size={22} />
+                    <span className="ln-ticker-name">{platform.label}</span>
                   </span>
                 ))}
               </div>

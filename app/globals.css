@@ -394,7 +394,8 @@ img {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  animation: ln-spin-counterclockwise 30s linear infinite;
+  /* orbit-1 spins counterclockwise; counter-rotate clockwise to stay upright */
+  animation: ln-spin-clockwise 30s linear infinite;
 }
 
 .ln-orbit-count {
@@ -472,18 +473,23 @@ img {
 .ln-ticker-logo {
   width: 137px;
   height: 40px;
-  display: grid;
-  place-items: center;
-  font-family: "Urbanist", sans-serif;
-  font-size: 22px;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.42);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  color: rgba(255, 255, 255, 0.45);
   white-space: nowrap;
   transition: color 0.2s ease;
 }
 
 .ln-ticker-logo:hover {
   color: var(--accent);
+}
+
+.ln-ticker-name {
+  font-family: "Urbanist", sans-serif;
+  font-size: 18px;
+  font-weight: 700;
 }
 
 .ln-ticker-note {
