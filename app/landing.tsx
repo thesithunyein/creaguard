@@ -6,7 +6,8 @@ import Link from "next/link";
 import { BrandIcon, Icon } from "./icons";
 
 const FULL_TEXT = "Creator Safety That Remembers Context -- Not Just Rules.";
-const SPLIT_AT = 42;
+// Split at a word boundary so the accent never breaks a word in half.
+const SPLIT_AT = 40;
 const LOGO_URL = "/logo.png";
 
 interface OrbitSpec {
@@ -155,7 +156,7 @@ function PillLink({
 function TypewriterHeading() {
   const { typed, done } = useTypewriter(FULL_TEXT, 35, 400);
   const light = typed.slice(0, SPLIT_AT);
-  const accent = typed.slice(SPLIT_AT);
+  const accent = typed.slice(SPLIT_AT).replace(/^\s+/, "");
 
   return (
     <h1 className="ln-heading">
@@ -225,7 +226,7 @@ function Circles() {
               } as CSSProperties
             }
           >
-            <Icon name={icon.icon} size={icon.size >= 78 ? 34 : 24} strokeWidth={2.2} />
+            <Icon name={icon.icon} size={icon.size >= 78 ? 36 : 26} strokeWidth={2.6} />
           </span>
         </div>
       ))}
