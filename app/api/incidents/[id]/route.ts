@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getIncident, getPolicy, saveIncident } from "@/lib/store";
-import { sendToMinds } from "@/lib/minds";
+import { fetchMindsReply, sendToMinds } from "@/lib/minds";
 import type { IncidentStatus } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -22,7 +22,13 @@ export async function GET(
   if (!incident) {
     return NextResponse.json({ error: "Incident not found." }, { status: 404 });
   }
-  return NextResponse.json({ incident });
+
+  let minds = null;
+  if (incident.mindsAlias) {
+    minds = await fetchMindsReply(incident);
+  }
+
+  return NextResponse.json({ incident, minds });
 }
 
 export async function PATCH(
@@ -60,6 +66,10 @@ export async function PATCH(
     if (body.relayToMinds === true) {
       const policy = await getPolicy();
       minds = await sendToMinds(policy, incident);
+      if (minds.alias) {
+        incident.mindsAlias = minds.alias;
+        await saveIncident(incident);
+      }
     }
 
     return NextResponse.json({ incident, minds });

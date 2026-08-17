@@ -66,6 +66,8 @@ export function CreaGuardApp() {
   const [policyDraft, setPolicyDraft] = useState("");
   const [policySaving, setPolicySaving] = useState(false);
   const [toast, setToast] = useState<{ title: string; copy: string } | null>(null);
+  const [mindsReply, setMindsReply] = useState<string | null>(null);
+  const [mindsState, setMindsState] = useState<"idle" | "pending" | "reply" | "error">("idle");
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -107,6 +109,46 @@ export function CreaGuardApp() {
     () => incidents.find((item) => item.id === selectedId) ?? null,
     [incidents, selectedId],
   );
+
+  useEffect(() => {
+    if (!selectedId) {
+      setMindsReply(null);
+      setMindsState("idle");
+      return;
+    }
+    let cancelled = false;
+    async function loadMindsReply() {
+      setMindsState("pending");
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        if (cancelled) return;
+        try {
+          const res = await fetch(`/api/incidents/${selectedId}`, { cache: "no-store" });
+          if (!res.ok) throw new Error("Failed to load case.");
+          const data = (await res.json()) as {
+            incident?: Incident;
+            minds?: { connected?: boolean; reply?: string; error?: string };
+          };
+          if (data.minds?.reply) {
+            setMindsReply(data.minds.reply);
+            setMindsState("reply");
+            return;
+          }
+          if (data.minds?.error && attempt >= 2) {
+            setMindsState("error");
+            return;
+          }
+        } catch {
+          if (cancelled) return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+      }
+      if (!cancelled) setMindsState("idle");
+    }
+    void loadMindsReply();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId]);
 
   const needsReview = incidents.filter((item) => item.status === "needs_review").length;
   const monitoring = incidents.filter((item) => item.status === "monitoring").length;
@@ -156,6 +198,8 @@ export function CreaGuardApp() {
         throw new Error(data.error ?? "Failed to update case.");
       }
       await refresh();
+      setMindsReply(null);
+      setMindsState("pending");
       setToast({
         title: "Case updated",
         copy: `${selected.externalId} is now ${nextStatus.replace("_", " ")}.`,
@@ -465,6 +509,46 @@ export function CreaGuardApp() {
                   <p className="cg-decision-note">{selected.decisionNote}</p>
                 </>
               )}
+
+              <div className="cg-drawer-section">Mind review</div>
+              <div className={`cg-minds-review ${mindsState}`}>
+                {mindsState === "pending" && (
+                  <>
+                    <span className="cg-minds-spinner" />
+                    <div>
+                      <strong>Consulting your Mind…</strong>
+                      <p>The Mind is reading the case against your policy.</p>
+                    </div>
+                  </>
+                )}
+                {mindsState === "reply" && mindsReply && (
+                  <>
+                    <span className="cg-minds-avatar"><Icon name="sparkles" size={14} /></span>
+                    <div>
+                      <strong>Your Mind replied</strong>
+                      <p className="cg-minds-reply-text">{mindsReply}</p>
+                    </div>
+                  </>
+                )}
+                {mindsState === "error" && (
+                  <>
+                    <span><Icon name="alert-triangle" size={14} /></span>
+                    <div>
+                      <strong>Mind reply unavailable</strong>
+                      <p>The case was relayed, but the reply could not be read. Check the Minds conversation for {selected.externalId}.</p>
+                    </div>
+                  </>
+                )}
+                {mindsState === "idle" && !selected.mindsAlias && (
+                  <>
+                    <span><Icon name="send" size={14} /></span>
+                    <div>
+                      <strong>Not relayed yet</strong>
+                      <p>Use “Relay to Minds” to send this case to your Mind for review.</p>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
             <div className="cg-drawer-actions">
               <button className="cg-btn ghost" onClick={() => updateIncident("monitoring")}>

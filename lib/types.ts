@@ -46,6 +46,7 @@ export interface Incident {
   updatedAt: string;
   followUpAt?: string;
   decisionNote?: string;
+  mindsAlias?: string;
 }
 
 export interface Policy {
