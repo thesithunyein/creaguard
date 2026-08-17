@@ -1,93 +1,107 @@
 # CreaGuard
 
-> A persistent safety Mind for creators.
+> A persistent creator-safety product for threats, doxxing, impersonation, scams, and repeated harassment.
 
-CreaGuard is a creator-safety product for solo creators and small online communities. It helps identify escalating threats, doxxing, impersonation, scams, and repeated harassment while keeping serious actions under human control.
+CreaGuard is a real, API-backed web application built for the **Moderation & Community Assistance** track of Creative Minds Jam #1. It gives solo creators and small communities a safety workspace that connects related incidents across time instead of moderating one message at a time.
 
-This repository currently contains a polished, zero-cost interactive MVP demo. It demonstrates the intended product experience with realistic seeded incidents. The next integration phase connects the live workflow to Minds and Featherless.
+## What it does
 
-## Why this product
+- **Review a message** — paste a community message and CreaGuard runs it through the analysis pipeline.
+- **Real classification** — when `FEATHERLESS_API_KEY` is set, messages are classified through the Featherless API with strict JSON validation. Without the key, CreaGuard stores the case for manual review and never fabricates a result.
+- **Persistent storage** — incidents and the safety policy are stored in Upstash Redis when `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are configured, with a file-backed store for local development.
+- **Human-in-the-loop review** — cases move through `needs_review`, `monitoring`, `resolved`, and `dismissed`. Serious actions are never automated.
+- **Risk scoring** — deterministic severity/confidence scoring with repetition weighting and follow-up scheduling.
+- **Scheduled follow-ups** — `POST /api/followups` promotes due unresolved cases back to review (protect the endpoint with `CRON_SECRET`).
+- **Minds relay** — with `MINDS_BUILDER_API_KEY` and `MINDS_MIND_ID`, a case can be relayed to a Mind through the official `@animocabrands/minds-client-lib`.
 
-A keyword filter sees one message. CreaGuard remembers the creator's boundaries and connects incidents over time:
+## Stack
 
-- Normal criticism is not automatically punished.
-- Threats and doxxing are escalated for immediate human review.
-- Repeated targeting becomes one connected incident.
-- Unresolved cases receive an autonomous follow-up.
+- Next.js 15 (App Router, serverless API routes)
+- React 19 + TypeScript
+- Upstash Redis (`@upstash/redis`)
+- Featherless (OpenAI-compatible API)
+- `@animocabrands/minds-client-lib`
 
-**Differentiation:** general moderation tools protect the community; CreaGuard protects the creator.
-
-## Run the demo
-
-This first version has no build step or paid dependency. Open `index.html` in a browser, or serve the folder with any static file server:
+## Local development
 
 ```bash
-python -m http.server 4173
+npm install
+cp .env.example .env.local   # optional
+npm run dev
 ```
 
-Then visit `http://localhost:4173`.
+Open `http://localhost:4173`.
 
-The demo includes:
+Without any environment variables, the app runs with a local file store and manual review mode. The UI reports its real connection state in **Settings**.
 
-- Overview dashboard
-- Incident inbox
-- Incident detail drawer
-- Creator safety policy editor
-- Mind activity timeline
-- Simulated incoming event
-- Human approval and monitoring actions
+## Environment variables
 
-## Intended production architecture
+| Variable | Purpose |
+| --- | --- |
+| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Durable incident and policy storage |
+| `FEATHERLESS_API_KEY` | Real message classification |
+| `FEATHERLESS_MODEL` | Optional model override (default `Qwen/Qwen2.5-7B-Instruct`) |
+| `MINDS_BUILDER_API_KEY` / `MINDS_MIND_ID` | Relay cases to a Minds agent |
+| `CRON_SECRET` | Bearer secret for the follow-up endpoint |
+
+Legacy Vercel KV names (`KV_REST_API_URL` / `KV_REST_API_TOKEN`) are also accepted for the Redis connection.
+
+## API
+
+| Method | Route | Description |
+| --- | --- | --- |
+| `GET` | `/api/health` | Connection status for storage, Featherless, and Minds |
+| `GET` | `/api/incidents` | List incidents |
+| `POST` | `/api/incidents` | Analyze and create an incident |
+| `GET` | `/api/incidents/[id]` | Get one incident |
+| `PATCH` | `/api/incidents/[id]` | Update status, add a note, relay to Minds |
+| `GET` / `PUT` | `/api/policy` | Read or save the safety policy |
+| `POST` | `/api/followups` | Promote due unresolved cases (authenticated) |
+
+## Architecture
 
 ```text
-Community event / webhook
-          ↓
-CreaGuard backend + redaction
-          ↓
-Featherless classifier
-          ↓
-Incident ledger (exact records)
-          ↓
-Minds persistent reasoning
-          ↓
-Deterministic safety gate
-          ↓
-Creator dashboard + approval
-          ↓
-Due-case scheduler → Minds follow-up
+Community event
+      ↓
+CreaGuard backend (validation + redaction boundaries)
+      ↓
+Featherless classification (optional, strict JSON)
+      ↓
+Incident ledger (Upstash Redis / local file)
+      ↓
+Minds relay (optional, official client)
+      ↓
+Deterministic safety gates + human review
+      ↓
+Scheduled follow-up endpoint
 ```
 
 ### Responsibility split
 
-- **Minds:** creator policy memory, cross-session reasoning, case continuity, follow-up conversation.
-- **Featherless:** bounded message analysis, risk classification, summaries, and draft responses.
-- **Application database:** exact incident IDs, timestamps, statuses, scores, decisions, and audit history.
-- **Safety gate:** prevents automatic bans, deletion, public accusations, or emergency claims.
-
-The production integration should use the official server-side `@animocabrands/minds-client-lib`. Before claiming native autonomous scheduling, verify the supported Minds trigger flow with the Minds team. The UI must never expose API keys.
-
-## Hackathon fit
-
-CreaGuard targets **Moderation & Community Assistance** and is designed to demonstrate:
-
-1. Memory — the Mind remembers creator boundaries.
-2. Continuity — related incidents continue across sessions.
-3. Autonomous follow-up — due unresolved cases are reviewed without a manual “run” action.
-4. Creator-economy fit — creators need affordable, context-aware safety support.
+- **Application database** — exact incidents, events, scores, statuses, and decisions.
+- **Featherless** — bounded message-level classification and summarization.
+- **Minds** — persistent agent relay for cross-session creator context.
+- **Deterministic gates** — bans, reports, and evidence deletion are always blocked from automation.
 
 ## Safety boundaries
 
-- Threat and doxxing signals require immediate human review.
-- Bans, deletions, reporting, and public responses require explicit approval.
-- Evidence is preserved rather than silently deleted.
+- Threat, doxxing, impersonation, and scam categories always require human review.
+- Severity 4+ requires human review.
+- Automatic bans, automatic reporting, and evidence deletion are hard-blocked.
 - The classifier is advisory; it is not an emergency-response service.
-- Sensitive message data should be redacted or minimized before storage.
+- Sensitive message content should be redacted or minimized before being stored in production.
 
-## Roadmap
+## Why this is a real product, not a demo
 
-1. Prove Minds messaging and cross-session memory with the official client.
-2. Connect Featherless with validated structured JSON output.
-3. Add SQLite incident ledger and deterministic risk gates.
-4. Implement the due-case Minds follow-up flow.
-5. Add a real Discord or Telegram test integration only after the local flow is reliable.
-6. Deploy a free-tier live site and record the required 1.5–2 minute demo.
+- No seeded incidents: the workspace starts empty and fills from real API calls.
+- Every screen is backed by a live API route.
+- Missing credentials produce an explicit `not configured` state instead of a fabricated AI result.
+- Storage, analysis, and Minds integration are each independently verifiable in the Settings screen.
+
+## Deployment
+
+```bash
+vercel --prod
+```
+
+Set the environment variables above in the Vercel project settings. For the scheduled follow-up, point a cron provider at `POST /api/followups` with `Authorization: Bearer $CRON_SECRET`.
