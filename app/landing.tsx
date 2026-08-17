@@ -16,14 +16,10 @@ interface OrbitSpec {
   reverse: boolean;
 }
 
-interface IconSpec {
-  icon: string;
+interface NodeSpec {
+  label: string;
   angle: number;
   radius: number;
-  size: number;
-  square?: boolean;
-  glow: string;
-  delay: number;
 }
 
 const ORBITS: OrbitSpec[] = [
@@ -33,16 +29,14 @@ const ORBITS: OrbitSpec[] = [
   { size: 797, duration: 60, reverse: true },
 ];
 
-const ICONS: IconSpec[] = [
-  { icon: "alert-triangle", angle: 270, radius: 177, size: 58, square: true, glow: "#4CD137", delay: 0.6 },
-  { icon: "flag", angle: 60, radius: 251, size: 58, glow: "#FBBF24", delay: 0.8 },
-  { icon: "trending-up", angle: 180, radius: 251, size: 78, glow: "#F87171", delay: 1.0 },
-  { icon: "sparkles", angle: 300, radius: 251, size: 58, square: true, glow: "#60A5FA", delay: 1.2 },
-  { icon: "message-circle", angle: 130, radius: 325, size: 88, glow: "#F472B6", delay: 1.4 },
-  { icon: "check-circle", angle: 30, radius: 399, size: 58, glow: "#4CD137", delay: 1.6 },
-  { icon: "lock", angle: 95, radius: 399, size: 88, square: true, glow: "#FB923C", delay: 1.8 },
-  { icon: "shield", angle: 220, radius: 399, size: 88, square: true, glow: "#F472B6", delay: 2.0 },
-  { icon: "eye", angle: 320, radius: 399, size: 58, glow: "#A3E635", delay: 2.3 },
+// One subtle node per safety signal, evenly spaced across the inner orbits
+// (kept within the visible container so none of the labels clip).
+const NODES: NodeSpec[] = [
+  { label: "Threat", angle: 72, radius: 251 },
+  { label: "Doxxing", angle: 144, radius: 325 },
+  { label: "Scam", angle: 216, radius: 251 },
+  { label: "Harassment", angle: 288, radius: 325 },
+  { label: "Impersonation", angle: 0, radius: 251 },
 ];
 
 const PLATFORMS = [
@@ -106,17 +100,6 @@ function useTypewriter(
   }, [text, speed, delay]);
 
   return { typed: text.slice(0, count), done: count >= text.length };
-}
-
-function CursorArrow() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        d="M4 2.5v18l5.6-6.1 3.1 7.1 2.2-.9-3.1-7 6.7-1.8L4 2.5z"
-        fill="#4CD137"
-      />
-    </svg>
-  );
 }
 
 function Chevron() {
@@ -195,8 +178,12 @@ function Circles() {
 
   return (
     <div className="ln-circles">
+      <div className="ln-radar-sweep" />
       <Orbit spec={ORBITS[0]}>
         <div className="ln-orbit-center">
+          <div className="ln-orbit-core">
+            <Icon name="shield" size={26} strokeWidth={2} />
+          </div>
           <div className="ln-orbit-count">{count}%</div>
           <div className="ln-orbit-label">Human approval</div>
         </div>
@@ -205,29 +192,18 @@ function Circles() {
       <Orbit spec={ORBITS[2]} />
       <Orbit spec={ORBITS[3]} />
 
-      {ICONS.map((icon, index) => (
+      {NODES.map((node) => (
         <div
-          key={`${icon.icon}-${index}`}
-          className="ln-icon-wrap"
+          key={node.label}
+          className="ln-node-wrap"
           style={
             {
-              "--fly-delay": `${icon.delay}s`,
-              transform: `translate(-50%, -50%) rotate(${icon.angle}deg) translate(${icon.radius}px) rotate(${-icon.angle}deg)`,
-              "--glow": icon.glow,
+              transform: `translate(-50%, -50%) rotate(${node.angle}deg) translate(${node.radius}px) rotate(${-node.angle}deg)`,
             } as CSSProperties
           }
         >
-          <span
-            className={`ln-icon ${icon.square ? "ln-icon-square" : ""}`}
-            style={
-              {
-                width: icon.size,
-                height: icon.size,
-              } as CSSProperties
-            }
-          >
-            <Icon name={icon.icon} size={icon.size >= 78 ? 36 : 26} strokeWidth={2.6} />
-          </span>
+          <span className="ln-node-dot" />
+          <span className="ln-node-label">{node.label}</span>
         </div>
       ))}
     </div>
@@ -246,13 +222,11 @@ export function LandingPage() {
           <span className="ln-brand">CreaGuard</span>
           <nav className="ln-nav">
             <a href="#product" className="ln-nav-link">Product</a>
-            <a href="#safety" className="ln-nav-link">Safety</a>
             <a href="#platforms" className="ln-nav-link">Platforms</a>
           </nav>
         </div>
         <div className="ln-header-right">
           <Link href="/app" className="ln-signin">Sign in</Link>
-          <PillLink href="/app" variant="left">Open Dashboard</PillLink>
         </div>
       </header>
 
@@ -265,10 +239,6 @@ export function LandingPage() {
                 Open Dashboard <Chevron />
               </span>
             </PillLink>
-          </div>
-          <div className="ln-cursor-label" style={{ animationDelay: "3.6s" }}>
-            <CursorArrow />
-            <span className="ln-cursor-name">Your safety Mind</span>
           </div>
         </section>
 

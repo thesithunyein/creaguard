@@ -259,9 +259,13 @@ export function CreaGuardApp() {
           </nav>
         </div>
         <div className="cg-topbar-right">
-          <span className={`cg-conn-chip ${status ? "connected" : ""}`}>
+          <span className={`cg-conn-chip ${status?.minds ? "connected" : ""}`}>
             <i />
             {status?.minds ? "Minds connected" : "Minds not configured"}
+          </span>
+          <span className={`cg-storage-chip ${status?.storage === "redis" ? "ok" : ""}`}>
+            <i />
+            {storageLabel}
           </span>
           <button className="cg-icon-button" aria-label="Notifications">
             <Icon name="bell" size={18} />
@@ -269,66 +273,6 @@ export function CreaGuardApp() {
           <div className="cg-avatar">SN</div>
         </div>
       </header>
-
-      <aside className="cg-sidebar">
-        <div className="cg-sidebar-head">
-          <div>
-            <div className="cg-sidebar-eyebrow">Workspace</div>
-            <div className="cg-sidebar-title">Safety Center</div>
-          </div>
-          <button className="cg-sidebar-collapse" aria-label="Collapse sidebar">
-            <Icon name="chevron-down" size={14} />
-          </button>
-        </div>
-
-        <div className="cg-sidebar-search">
-          <Icon name="search" size={14} />
-          <span>Search cases</span>
-        </div>
-
-        <div className="cg-sidebar-section">Live queues</div>
-        {[
-          { key: "needs_review", label: "Needs review", icon: "alert-triangle" },
-          { key: "monitoring", label: "Monitoring", icon: "clock" },
-          { key: "resolved", label: "Resolved", icon: "check-circle" },
-        ].map((item) => (
-          <button
-            key={item.key}
-            className="cg-sidebar-item"
-            onClick={() => {
-              setView("incidents");
-            }}
-          >
-            <span className={`cg-sidebar-icon tone-${item.key}`}>
-              <Icon name={item.icon} size={14} />
-            </span>
-            <span>{item.label}</span>
-            <b>{incidents.filter((i) => i.status === item.key).length}</b>
-          </button>
-        ))}
-
-        <div className="cg-sidebar-section">Policy</div>
-        <button className="cg-sidebar-item" onClick={() => setView("policy")}>
-          <span className="cg-sidebar-icon">
-            <Icon name="book" size={14} />
-          </span>
-          <span>Safety boundaries</span>
-        </button>
-
-        <div className="cg-sidebar-foot">
-          <div className="cg-policy-snapshot">
-            <div className="cg-policy-snapshot-label">Active policy</div>
-            <p>{policy ? policy.content.slice(0, 96) + "…" : "Loading policy…"}</p>
-            <button onClick={() => setView("policy")}>
-              Edit policy <Icon name="arrow-right" size={13} />
-            </button>
-          </div>
-          <div className="cg-storage-status">
-            <span className={status?.storage === "redis" ? "ok" : "warn"} />
-            Storage: {storageLabel}
-          </div>
-        </div>
-      </aside>
 
       <main className="cg-main">
         {error && (
