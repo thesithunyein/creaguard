@@ -547,6 +547,41 @@ function Overview(props: {
         </div>
       </section>
 
+      {props.incidents.length === 0 && !props.loading && (
+        <section className="cg-onboard">
+          <div className="cg-onboard-head">
+            <div className="cg-eyebrow">GET STARTED</div>
+            <h2>Protect your space in three steps</h2>
+          </div>
+          <div className="cg-onboard-steps">
+            <div className="cg-onboard-step">
+              <span>1</span>
+              <div>
+                <strong>Paste a message</strong>
+                <p>Review one message now to see the whole flow.</p>
+              </div>
+            </div>
+            <div className="cg-onboard-step">
+              <span>2</span>
+              <div>
+                <strong>Watch it get analyzed</strong>
+                <p>Risk score and category in seconds — no keyword filters.</p>
+              </div>
+            </div>
+            <div className="cg-onboard-step">
+              <span>3</span>
+              <div>
+                <strong>Your Mind reviews, you approve</strong>
+                <p>The Mind drafts the call; you make the decision.</p>
+              </div>
+            </div>
+          </div>
+          <button className="cg-btn primary" onClick={props.onCompose}>
+            Review your first message
+          </button>
+        </section>
+      )}
+
       <section className="cg-stats">
         <StatCard label="Open incidents" value={props.incidents.filter((i) => i.status !== "resolved" && i.status !== "dismissed").length} icon="inbox" tone="violet" />
         <StatCard label="Needs review" value={props.needsReview} icon="alert-triangle" tone="amber" />
