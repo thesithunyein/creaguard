@@ -230,13 +230,6 @@ export function CreaGuardApp() {
     }
   }
 
-  const storageLabel =
-    status?.storage === "redis"
-      ? "Upstash Redis"
-      : status?.storage === "file"
-        ? "Local file store"
-        : "In-memory";
-
   return (
     <div className="cg-shell">
       <header className="cg-topbar">
@@ -262,10 +255,6 @@ export function CreaGuardApp() {
           <span className={`cg-conn-chip ${status?.minds ? "connected" : ""}`}>
             <i />
             {status?.minds ? "Minds connected" : "Minds not configured"}
-          </span>
-          <span className={`cg-storage-chip ${status?.storage === "redis" ? "ok" : ""}`}>
-            <i />
-            {storageLabel}
           </span>
           <div className="cg-avatar">SN</div>
         </div>
