@@ -47,6 +47,8 @@ export interface Incident {
   followUpAt?: string;
   decisionNote?: string;
   mindsAlias?: string;
+  /** Cached Mind reply so the dashboard loads it instantly on revisit. */
+  mindsReply?: string;
 }
 
 export interface Policy {

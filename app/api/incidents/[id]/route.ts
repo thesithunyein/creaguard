@@ -25,7 +25,16 @@ export async function GET(
 
   let minds = null;
   if (incident.mindsAlias) {
-    minds = await fetchMindsReply(incident);
+    if (incident.mindsReply) {
+      // Cached — return instantly instead of re-querying the Mind.
+      minds = { connected: true, reply: incident.mindsReply };
+    } else {
+      minds = await fetchMindsReply(incident);
+      if (minds.reply) {
+        incident.mindsReply = minds.reply;
+        await saveIncident(incident);
+      }
+    }
   }
 
   return NextResponse.json({ incident, minds });

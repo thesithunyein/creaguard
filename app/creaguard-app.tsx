@@ -119,7 +119,7 @@ export function CreaGuardApp() {
     let cancelled = false;
     async function loadMindsReply() {
       setMindsState("pending");
-      for (let attempt = 0; attempt < 6; attempt += 1) {
+      for (let attempt = 0; attempt < 24; attempt += 1) {
         if (cancelled) return;
         try {
           const res = await fetch(`/api/incidents/${selectedId}`, { cache: "no-store" });
@@ -128,6 +128,12 @@ export function CreaGuardApp() {
             incident?: Incident;
             minds?: { connected?: boolean; reply?: string; error?: string };
           };
+          // Cached reply: instant on revisit.
+          if (data.incident?.mindsReply) {
+            setMindsReply(data.incident.mindsReply);
+            setMindsState("reply");
+            return;
+          }
           if (data.minds?.reply) {
             setMindsReply(data.minds.reply);
             setMindsState("reply");
