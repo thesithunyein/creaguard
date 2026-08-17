@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { analyzeMessage } from "@/lib/analyze";
 import { newId } from "@/lib/ids";
+import { sendToMinds } from "@/lib/minds";
 import { computeFollowUpAt, computeRisk, requiresHumanReview } from "@/lib/risk";
-import { getIncidents, saveIncident } from "@/lib/store";
+import { getIncidents, getPolicy, saveIncident } from "@/lib/store";
 import type { Incident, IncidentEvent } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -83,8 +84,21 @@ export async function POST(request: Request) {
 
     await saveIncident(incident);
 
+    // Autonomous follow-up: when a message needs human review, relay it to
+    // the creator's Mind immediately — no manual click required.
+    let mindsRelayed = false;
+    if (status === "needs_review") {
+      const policy = await getPolicy();
+      const relay = await sendToMinds(policy, incident);
+      if (relay.alias) {
+        incident.mindsAlias = relay.alias;
+        await saveIncident(incident);
+        mindsRelayed = true;
+      }
+    }
+
     return NextResponse.json(
-      { incident, relatedCount: related.length },
+      { incident, relatedCount: related.length, mindsRelayed },
       { status: 201 },
     );
   } catch (error) {

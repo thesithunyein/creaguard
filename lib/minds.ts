@@ -80,6 +80,46 @@ export async function sendToMinds(
 }
 
 /**
+ * Sends an autonomous follow-up message to the Mind for an unresolved case,
+ * asking it to recommend the next step. Used by the scheduled cron so the
+ * Mind keeps working without a human clicking anything.
+ */
+export async function followUpToMinds(
+  policy: Policy,
+  incident: Incident,
+): Promise<MindsResult> {
+  if (!mindsConfig()) {
+    return { connected: false, message: "Minds is not configured." };
+  }
+
+  try {
+    const client = await mindsClient();
+    const config = mindsConfig();
+    if (!config) return { connected: false, message: "Minds is not configured." };
+
+    const alias = incident.mindsAlias ?? incidentAlias(incident);
+    await client.ensureConversation(alias, config.mindId);
+
+    const message = [
+      `Autonomous follow-up for ${incident.externalId}`,
+      `This case is still unresolved and needs a decision.`,
+      `Status: ${incident.status}, category ${incident.category}, risk ${incident.riskScore}/100.`,
+      `Policy: ${policy.content}`,
+      `What should the creator do next? Recommend a single action; the creator will approve it.`,
+    ].join("\n");
+
+    await client.sendMessage({ alias, messageText: message });
+
+    return { connected: true, alias, message: "Follow-up sent to your Mind." };
+  } catch (error) {
+    return {
+      connected: true,
+      error: error instanceof Error ? error.message : "Minds follow-up failed.",
+    };
+  }
+}
+
+/**
  * Reads the latest reply from the creator's Mind in the conversation
  * history for this incident. Uses senderType (0|2 = Mind, 1 = human).
  */
