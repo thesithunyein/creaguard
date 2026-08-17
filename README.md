@@ -12,7 +12,7 @@ CreaGuard is a real, API-backed web application built for the **Moderation & Com
 - **Human-in-the-loop review** — cases move through `needs_review`, `monitoring`, `resolved`, and `dismissed`. Serious actions are never automated.
 - **Risk scoring** — deterministic severity/confidence scoring with repetition weighting and follow-up scheduling.
 - **Scheduled follow-ups** — `POST /api/followups` promotes due unresolved cases back to review (protect the endpoint with `CRON_SECRET`).
-- **Minds relay** — with `MINDS_BUILDER_API_KEY` and `MINDS_MIND_ID`, a case can be relayed to a Mind through the official `@animocabrands/minds-client-lib`.
+- **Minds relay** — with `MINDS_BUILDER_API_KEY` and `MINDS_MIND_ID`, a case is relayed to your Mind through the official `@animocabrands/minds-client-lib`. The relay is non-blocking: the case is sent immediately, the conversation alias is stored on the incident, and the Mind's reply is read back from conversation history into a live **Mind review** panel in the case drawer. This proves cross-session memory and continuity: the Mind sees every prior case in the same conversation.
 
 ## Stack
 
