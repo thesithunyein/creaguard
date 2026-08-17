@@ -186,12 +186,8 @@ export function CreaGuardApp() {
     <div className="cg-shell">
       <header className="cg-topbar">
         <div className="cg-topbar-left">
-          <div className="cg-logo-mark" aria-hidden>
-            <span />
-            <span />
-            <span />
-            <span />
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="CreaGuard logo" className="cg-logo-img" />
           <div className="cg-brand">CreaGuard</div>
           <nav className="cg-mainnav">
             {(["overview", "incidents", "policy", "settings"] as View[]).map((item) => (

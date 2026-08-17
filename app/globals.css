@@ -78,22 +78,11 @@ button {
   gap: 18px;
 }
 
-.cg-logo-mark {
-  display: grid;
-  grid-template-columns: repeat(2, 9px);
-  grid-template-rows: repeat(2, 9px);
-  gap: 2px;
+.cg-logo-img {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
 }
-
-.cg-logo-mark span {
-  border-radius: 4px;
-  background: var(--violet);
-}
-
-.cg-logo-mark span:nth-child(1) { background: #3a2fb8; }
-.cg-logo-mark span:nth-child(2) { background: var(--violet-deep); }
-.cg-logo-mark span:nth-child(3) { background: #8d7ff4; }
-.cg-logo-mark span:nth-child(4) { background: var(--violet); }
 
 .cg-brand {
   font-weight: 800;

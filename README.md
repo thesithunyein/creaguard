@@ -1,4 +1,4 @@
-# CreaGuard
+# <img src="public/logo.png" width="28" height="28" alt="CreaGuard logo" /> CreaGuard
 
 > A persistent creator-safety product for threats, doxxing, impersonation, scams, and repeated harassment.
 
