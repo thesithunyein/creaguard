@@ -222,7 +222,7 @@ export function LandingPage() {
           <span className="ln-brand">CreaGuard</span>
           <nav className="ln-nav">
             <a href="#product" className="ln-nav-link">Product</a>
-            <a href="#how" className="ln-nav-link">How it works</a>
+            <Link href="/faq" className="ln-nav-link">How it works</Link>
             <a href="#platforms" className="ln-nav-link">Platforms</a>
           </nav>
         </div>
@@ -244,42 +244,6 @@ export function LandingPage() {
           <Circles />
         </section>
       </main>
-
-      <section className="ln-how" id="how">
-        <div className="ln-how-head">
-          <div className="ln-how-eyebrow">How it works</div>
-          <h2>From message to decision, in three steps</h2>
-        </div>
-        <div className="ln-how-grid">
-          <div className="ln-how-card">
-            <span className="ln-how-icon"><Icon name="users" size={22} strokeWidth={2} /></span>
-            <div className="ln-how-step">Step 1</div>
-            <h3>Connect your community</h3>
-            <p>
-              Messages flow in from Discord, Telegram, and YouTube — or paste
-              one to review right now.
-            </p>
-          </div>
-          <div className="ln-how-card">
-            <span className="ln-how-icon"><Icon name="shield" size={22} strokeWidth={2} /></span>
-            <div className="ln-how-step">Step 2</div>
-            <h3>CreaGuard reads the context</h3>
-            <p>
-              Every message is classified for threats, doxxing, scams, and
-              repeat harassment — with a risk score, not just keywords.
-            </p>
-          </div>
-          <div className="ln-how-card">
-            <span className="ln-how-icon"><Icon name="check-circle" size={22} strokeWidth={2} /></span>
-            <div className="ln-how-step">Step 3</div>
-            <h3>Your Mind reviews, you approve</h3>
-            <p>
-              It connects the dots across days and drafts the decision. Nothing
-              auto-bans — you stay in control.
-            </p>
-          </div>
-        </div>
-      </section>
 
       <section className="ln-ticker-section" id="platforms">
         <div className="ln-ticker">
