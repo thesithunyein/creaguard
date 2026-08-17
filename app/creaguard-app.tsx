@@ -256,7 +256,6 @@ export function CreaGuardApp() {
             <i />
             {status?.minds ? "Minds connected" : "Minds not configured"}
           </span>
-          <div className="cg-avatar">SN</div>
         </div>
       </header>
 
