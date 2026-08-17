@@ -1,5 +1,5 @@
-import { CreaGuardApp } from "./creaguard-app";
+import { LandingPage } from "./landing";
 
 export default function Page() {
-  return <CreaGuardApp />;
+  return <LandingPage />;
 }
