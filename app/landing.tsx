@@ -225,9 +225,6 @@ export function LandingPage() {
             <a href="#platforms" className="ln-nav-link">Platforms</a>
           </nav>
         </div>
-        <div className="ln-header-right">
-          <Link href="/app" className="ln-signin">Sign in</Link>
-        </div>
       </header>
 
       <main className="ln-hero" id="product">

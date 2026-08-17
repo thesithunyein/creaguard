@@ -267,9 +267,6 @@ export function CreaGuardApp() {
             <i />
             {storageLabel}
           </span>
-          <button className="cg-icon-button" aria-label="Notifications">
-            <Icon name="bell" size={18} />
-          </button>
           <div className="cg-avatar">SN</div>
         </div>
       </header>

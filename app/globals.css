@@ -157,8 +157,7 @@ img {
   padding: 2px 0;
 }
 
-.ln-nav-link::after,
-.ln-signin::after {
+.ln-nav-link::after {
   content: "";
   position: absolute;
   left: 0;
@@ -171,17 +170,8 @@ img {
   transition: transform 0.3s ease;
 }
 
-.ln-nav-link:hover::after,
-.ln-signin:hover::after {
+.ln-nav-link:hover::after {
   transform: scaleX(1);
-}
-
-.ln-signin {
-  position: relative;
-  color: #fff;
-  font-size: 15px;
-  font-weight: 500;
-  padding: 2px 0;
 }
 
 /* Buttons */
@@ -693,19 +683,6 @@ img {
 
 .cg-storage-chip.ok i {
   background: var(--green);
-}
-
-.cg-icon-button {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  border-radius: 10px;
-  color: var(--muted);
-}
-
-.cg-icon-button:hover {
-  background: var(--surface-2);
 }
 
 .cg-avatar {
@@ -1845,9 +1822,6 @@ img {
   }
   .ln-brand {
     font-size: 18px;
-  }
-  .ln-signin {
-    font-size: 13px;
   }
   .ln-btn {
     padding: 10px 18px;
