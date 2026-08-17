@@ -1030,6 +1030,9 @@ img {
 }
 
 .cg-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   color: var(--accent);
   font-size: 12px;
   font-weight: 600;
@@ -1680,6 +1683,9 @@ img {
 
 /* Buttons */
 .cg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 11px 18px;
   border-radius: 10px;
   font-size: 13px;

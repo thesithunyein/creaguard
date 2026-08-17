@@ -7,6 +7,7 @@ import type {
   RiskCategory,
   SystemStatus,
 } from "@/lib/types";
+import { Icon } from "./icons";
 
 type View = "overview" | "incidents" | "policy" | "settings";
 
@@ -28,6 +29,16 @@ const categoryTone: Record<RiskCategory, string> = {
   harassment: "high",
   criticism: "safe",
   other: "neutral",
+};
+
+const categoryIcon: Record<RiskCategory, string> = {
+  threat: "alert-triangle",
+  doxxing: "eye-off",
+  impersonation: "user-x",
+  scam: "dollar-sign",
+  harassment: "flag",
+  criticism: "message-square",
+  other: "circle",
 };
 
 function relativeTime(value: string): string {
@@ -209,10 +220,7 @@ export function CreaGuardApp() {
             {status?.minds ? "Minds connected" : "Minds not configured"}
           </span>
           <button className="cg-icon-button" aria-label="Notifications">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
-              <path d="M13.7 21a2 2 0 0 1-3.4 0" />
-            </svg>
+            <Icon name="bell" size={18} />
           </button>
           <div className="cg-avatar">SN</div>
         </div>
@@ -224,19 +232,21 @@ export function CreaGuardApp() {
             <div className="cg-sidebar-eyebrow">Workspace</div>
             <div className="cg-sidebar-title">Safety Center</div>
           </div>
-          <button className="cg-sidebar-collapse" aria-label="Collapse sidebar">⌄</button>
+          <button className="cg-sidebar-collapse" aria-label="Collapse sidebar">
+            <Icon name="chevron-down" size={14} />
+          </button>
         </div>
 
         <div className="cg-sidebar-search">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
+          <Icon name="search" size={14} />
           <span>Search cases</span>
         </div>
 
         <div className="cg-sidebar-section">Live queues</div>
         {[
-          { key: "needs_review", label: "Needs review", icon: "!" },
-          { key: "monitoring", label: "Monitoring", icon: "◷" },
-          { key: "resolved", label: "Resolved", icon: "✓" },
+          { key: "needs_review", label: "Needs review", icon: "alert-triangle" },
+          { key: "monitoring", label: "Monitoring", icon: "clock" },
+          { key: "resolved", label: "Resolved", icon: "check-circle" },
         ].map((item) => (
           <button
             key={item.key}
@@ -245,7 +255,9 @@ export function CreaGuardApp() {
               setView("incidents");
             }}
           >
-            <span className={`cg-sidebar-icon tone-${item.key}`}>{item.icon}</span>
+            <span className={`cg-sidebar-icon tone-${item.key}`}>
+              <Icon name={item.icon} size={14} />
+            </span>
             <span>{item.label}</span>
             <b>{incidents.filter((i) => i.status === item.key).length}</b>
           </button>
@@ -253,7 +265,9 @@ export function CreaGuardApp() {
 
         <div className="cg-sidebar-section">Policy</div>
         <button className="cg-sidebar-item" onClick={() => setView("policy")}>
-          <span className="cg-sidebar-icon">◎</span>
+          <span className="cg-sidebar-icon">
+            <Icon name="book" size={14} />
+          </span>
           <span>Safety boundaries</span>
         </button>
 
@@ -261,7 +275,9 @@ export function CreaGuardApp() {
           <div className="cg-policy-snapshot">
             <div className="cg-policy-snapshot-label">Active policy</div>
             <p>{policy ? policy.content.slice(0, 96) + "…" : "Loading policy…"}</p>
-            <button onClick={() => setView("policy")}>Edit policy →</button>
+            <button onClick={() => setView("policy")}>
+              Edit policy <Icon name="arrow-right" size={13} />
+            </button>
           </div>
           <div className="cg-storage-status">
             <span className={status?.storage === "redis" ? "ok" : "warn"} />
@@ -273,7 +289,7 @@ export function CreaGuardApp() {
       <main className="cg-main">
         {error && (
           <div className="cg-alert">
-            <span>!</span>
+            <span><Icon name="alert-triangle" size={15} /></span>
             <div>
               <strong>Something went wrong</strong>
               <p>{error}</p>
@@ -327,7 +343,9 @@ export function CreaGuardApp() {
                 <div className="cg-eyebrow">NEW INCIDENT</div>
                 <h2>Review a message</h2>
               </div>
-              <button className="cg-close" onClick={() => setComposerOpen(false)}>×</button>
+              <button className="cg-close" onClick={() => setComposerOpen(false)}>
+                <Icon name="x" size={16} />
+              </button>
             </div>
             <label className="cg-field">
               <span>Message</span>
@@ -388,11 +406,13 @@ export function CreaGuardApp() {
                 <div className="cg-eyebrow">{selected.externalId}</div>
                 <h2>{categoryLabels[selected.category]}</h2>
               </div>
-              <button className="cg-close" onClick={() => setSelectedId(null)}>×</button>
+              <button className="cg-close" onClick={() => setSelectedId(null)}>
+                <Icon name="x" size={16} />
+              </button>
             </div>
             <div className="cg-drawer-body">
               <div className={`cg-risk-banner tone-${categoryTone[selected.category]}`}>
-                <span>{categoryTone[selected.category] === "critical" ? "!" : "↗"}</span>
+                <span><Icon name={categoryIcon[selected.category]} size={15} /></span>
                 <div>
                   <strong>
                     {selected.status === "needs_review"
@@ -447,13 +467,17 @@ export function CreaGuardApp() {
               )}
             </div>
             <div className="cg-drawer-actions">
-              <button className="cg-btn ghost" onClick={() => updateIncident("monitoring")}>Monitor</button>
-              <button className="cg-btn ghost" onClick={() => updateIncident("resolved")}>Resolve</button>
+              <button className="cg-btn ghost" onClick={() => updateIncident("monitoring")}>
+                <Icon name="clock" size={14} /> Monitor
+              </button>
+              <button className="cg-btn ghost" onClick={() => updateIncident("resolved")}>
+                <Icon name="check" size={14} /> Resolve
+              </button>
               <button
                 className="cg-btn primary"
                 onClick={() => updateIncident(selected.status === "needs_review" ? "monitoring" : "resolved", true)}
               >
-                Relay to Minds
+                <Icon name="send" size={14} /> Relay to Minds
               </button>
             </div>
           </div>
@@ -462,7 +486,7 @@ export function CreaGuardApp() {
 
       {toast && (
         <div className="cg-toast">
-          <span>✓</span>
+          <span><Icon name="check" size={13} /></span>
           <div>
             <strong>{toast.title}</strong>
             <p>{toast.copy}</p>
@@ -500,7 +524,9 @@ function Overview(props: {
         <div className="cg-hero-visual">
           <div className="cg-orbit">
             <div className="cg-orbit-ring" />
-            <div className="cg-orbit-core">✦</div>
+            <div className="cg-orbit-core">
+              <Icon name="shield" size={26} />
+            </div>
             <span className="cg-orbit-tag tag-1">Threat</span>
             <span className="cg-orbit-tag tag-2">Doxxing</span>
             <span className="cg-orbit-tag tag-3">Scam</span>
@@ -509,10 +535,10 @@ function Overview(props: {
       </section>
 
       <section className="cg-stats">
-        <StatCard label="Open incidents" value={props.incidents.filter((i) => i.status !== "resolved" && i.status !== "dismissed").length} icon="◈" tone="violet" />
-        <StatCard label="Needs review" value={props.needsReview} icon="!" tone="amber" />
-        <StatCard label="Monitoring" value={props.monitoring} icon="◷" tone="blue" />
-        <StatCard label="Resolved" value={props.resolved} icon="✓" tone="green" />
+        <StatCard label="Open incidents" value={props.incidents.filter((i) => i.status !== "resolved" && i.status !== "dismissed").length} icon="inbox" tone="violet" />
+        <StatCard label="Needs review" value={props.needsReview} icon="alert-triangle" tone="amber" />
+        <StatCard label="Monitoring" value={props.monitoring} icon="clock" tone="blue" />
+        <StatCard label="Resolved" value={props.resolved} icon="check-circle" tone="green" />
       </section>
 
       <section className="cg-split">
@@ -522,13 +548,15 @@ function Overview(props: {
               <h2>Recent cases</h2>
               <p>Newest safety decisions in this workspace</p>
             </div>
-            <button className="cg-link" onClick={props.onViewAll}>View all →</button>
+            <button className="cg-link" onClick={props.onViewAll}>
+              View all <Icon name="arrow-right" size={13} />
+            </button>
           </div>
           {props.loading ? (
             <div className="cg-empty">Loading cases…</div>
           ) : props.incidents.length === 0 ? (
             <div className="cg-empty">
-              <div className="cg-empty-icon">✦</div>
+              <div className="cg-empty-icon"><Icon name="shield" size={26} /></div>
               <strong>No cases yet</strong>
               <p>Review your first message to start the safety log.</p>
               <button className="cg-btn primary" onClick={props.onCompose}>Review a message</button>
@@ -538,7 +566,7 @@ function Overview(props: {
               {props.incidents.slice(0, 5).map((incident) => (
                 <button className="cg-case-row" key={incident.id} onClick={() => props.onSelect(incident.id)}>
                   <span className={`cg-case-mark tone-${categoryTone[incident.category]}`}>
-                    {categoryTone[incident.category] === "critical" ? "!" : "↗"}
+                    <Icon name={categoryIcon[incident.category]} size={15} />
                   </span>
                   <div className="cg-case-main">
                     <div className="cg-case-title">
@@ -583,7 +611,7 @@ function Overview(props: {
             </div>
           </div>
           <div className="cg-principle">
-            <span>✦</span>
+            <span><Icon name="shield" size={16} /></span>
             <p>
               CreaGuard recommends. You decide. Dangerous actions are never taken automatically.
             </p>
@@ -599,7 +627,9 @@ function StatCard(props: { label: string; value: number; icon: string; tone: str
     <div className="cg-stat">
       <div className="cg-stat-head">
         <span>{props.label}</span>
-        <span className={`cg-stat-icon tone-${props.tone}`}>{props.icon}</span>
+        <span className={`cg-stat-icon tone-${props.tone}`}>
+          <Icon name={props.icon} size={14} />
+        </span>
       </div>
       <div className="cg-stat-value">{props.value}</div>
     </div>
@@ -726,10 +756,10 @@ function PolicyView(props: {
             </div>
           </div>
           <div className="cg-boundaries">
-            <div><span>◉</span><div><strong>Criticism is allowed</strong><small>Do not treat disagreement as abuse</small></div></div>
-            <div><span>!</span><div><strong>Human approval for bans</strong><small>Serious actions stay under your control</small></div></div>
-            <div><span>✦</span><div><strong>Calm response tone</strong><small>Drafts avoid escalation</small></div></div>
-            <div><span>↗</span><div><strong>Escalate repeat targeting</strong><small>Connected events trigger review</small></div></div>
+            <div><span><Icon name="message-square" size={13} /></span><div><strong>Criticism is allowed</strong><small>Do not treat disagreement as abuse</small></div></div>
+            <div><span><Icon name="alert-triangle" size={13} /></span><div><strong>Human approval for bans</strong><small>Serious actions stay under your control</small></div></div>
+            <div><span><Icon name="sparkles" size={13} /></span><div><strong>Calm response tone</strong><small>Drafts avoid escalation</small></div></div>
+            <div><span><Icon name="trending-up" size={13} /></span><div><strong>Escalate repeat targeting</strong><small>Connected events trigger review</small></div></div>
           </div>
         </div>
       </div>

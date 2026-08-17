@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
+import { Icon } from "./icons";
 
 const FULL_TEXT = "Creator Safety That Remembers Context -- Not Just Rules.";
 const SPLIT_AT = 42;
@@ -15,7 +16,7 @@ interface OrbitSpec {
 }
 
 interface IconSpec {
-  glyph: string;
+  icon: string;
   angle: number;
   radius: number;
   size: number;
@@ -32,15 +33,15 @@ const ORBITS: OrbitSpec[] = [
 ];
 
 const ICONS: IconSpec[] = [
-  { glyph: "!", angle: 270, radius: 177, size: 58, square: true, glow: "#4CD137", delay: 0.6 },
-  { glyph: "⚠", angle: 60, radius: 251, size: 58, glow: "#FBBF24", delay: 0.8 },
-  { glyph: "↗", angle: 180, radius: 251, size: 78, glow: "#F87171", delay: 1.0 },
-  { glyph: "✦", angle: 300, radius: 251, size: 58, square: true, glow: "#60A5FA", delay: 1.2 },
-  { glyph: "💬", angle: 130, radius: 325, size: 88, glow: "#F472B6", delay: 1.4 },
-  { glyph: "✓", angle: 30, radius: 399, size: 58, glow: "#4CD137", delay: 1.6 },
-  { glyph: "🔒", angle: 95, radius: 399, size: 88, square: true, glow: "#FB923C", delay: 1.8 },
-  { glyph: "🛡", angle: 220, radius: 399, size: 88, square: true, glow: "#F472B6", delay: 2.0 },
-  { glyph: "◉", angle: 320, radius: 399, size: 58, glow: "#A3E635", delay: 2.3 },
+  { icon: "alert-triangle", angle: 270, radius: 177, size: 58, square: true, glow: "#4CD137", delay: 0.6 },
+  { icon: "flag", angle: 60, radius: 251, size: 58, glow: "#FBBF24", delay: 0.8 },
+  { icon: "trending-up", angle: 180, radius: 251, size: 78, glow: "#F87171", delay: 1.0 },
+  { icon: "sparkles", angle: 300, radius: 251, size: 58, square: true, glow: "#60A5FA", delay: 1.2 },
+  { icon: "message-circle", angle: 130, radius: 325, size: 88, glow: "#F472B6", delay: 1.4 },
+  { icon: "check-circle", angle: 30, radius: 399, size: 58, glow: "#4CD137", delay: 1.6 },
+  { icon: "lock", angle: 95, radius: 399, size: 88, square: true, glow: "#FB923C", delay: 1.8 },
+  { icon: "shield", angle: 220, radius: 399, size: 88, square: true, glow: "#F472B6", delay: 2.0 },
+  { icon: "eye", angle: 320, radius: 399, size: 58, glow: "#A3E635", delay: 2.3 },
 ];
 
 const PLATFORMS = ["YouTube", "Discord", "Telegram", "Instagram", "Twitch"];
@@ -199,7 +200,7 @@ function Circles() {
 
       {ICONS.map((icon, index) => (
         <div
-          key={`${icon.glyph}-${index}`}
+          key={`${icon.icon}-${index}`}
           className="ln-icon-wrap"
           style={
             {
@@ -215,11 +216,10 @@ function Circles() {
               {
                 width: icon.size,
                 height: icon.size,
-                fontSize: icon.size >= 78 ? 28 : 20,
               } as CSSProperties
             }
           >
-            {icon.glyph}
+            <Icon name={icon.icon} size={icon.size >= 78 ? 34 : 24} strokeWidth={2.2} />
           </span>
         </div>
       ))}
