@@ -1,0 +1,95 @@
+import { NextResponse } from "next/server";
+import { waitUntil } from "@vercel/functions";
+import { processIncomingMessage } from "@/lib/intake";
+import { CATEGORY_LABELS, verdictFor } from "@/lib/verdict";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const GUIDE = [
+  "CreaGuard — creator safety bot.",
+  "",
+  "Send any message and it is analyzed for threats, doxxing, impersonation, scams, and harassment against your policy. High-risk cases are relayed to your Mind for review.",
+  "",
+  "Commands:",
+  "/review <message> — analyze a specific message",
+  "/start — this guide",
+  "",
+  "Every case lands in your dashboard, where you decide.",
+].join("\n");
+
+async function sendTelegramMessage(chatId: number, text: string) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return;
+  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, text }),
+  });
+}
+
+export async function POST(request: Request) {
+  // Secret-token check: set by the setup script via setWebhook(secret_token).
+  const secret = process.env.TELEGRAM_BOT_SECRET;
+  const provided = request.headers.get("x-telegram-bot-api-secret-token");
+  if (secret && provided !== secret) {
+    return NextResponse.json({ error: "Invalid secret token." }, { status: 401 });
+  }
+
+  let update: {
+    message?: {
+      text?: string;
+      chat?: { id?: number };
+      from?: { id?: number; username?: string; first_name?: string };
+    };
+  };
+  try {
+    update = (await request.json()) as typeof update;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
+  }
+
+  const message = update.message;
+  const chatId = message?.chat?.id;
+  if (!message || typeof chatId !== "number") {
+    return NextResponse.json({ ok: true });
+  }
+
+  const text = (message.text ?? "").trim();
+  const authorId = message.from?.username
+    ? `@${message.from.username}`
+    : `tg:${message.from?.id ?? "unknown"}`;
+
+  if (!text || text.startsWith("/")) {
+    await sendTelegramMessage(chatId, GUIDE);
+    return NextResponse.json({ ok: true });
+  }
+
+  // Acknowledge immediately and analyze in the background, then report
+  // back through the same pipeline every other channel uses.
+  waitUntil(
+    (async () => {
+      try {
+        const { incident, status } = await processIncomingMessage(
+          text,
+          authorId,
+          "telegram",
+        );
+        const reply = [
+          `${CATEGORY_LABELS[incident.category] ?? incident.category} — risk ${incident.riskScore}/100 (severity ${incident.severity}/5)`,
+          `> ${text}`,
+          verdictFor(status),
+          `Case ${incident.externalId} — open the dashboard to review.`,
+        ].join("\n");
+        await sendTelegramMessage(chatId, reply);
+      } catch {
+        await sendTelegramMessage(
+          chatId,
+          "Something went wrong analyzing that message.",
+        );
+      }
+    })(),
+  );
+
+  return NextResponse.json({ ok: true });
+}

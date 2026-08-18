@@ -307,6 +307,7 @@ export function CreaGuardApp() {
             loading={loading}
             onSelect={setSelectedId}
             onCompose={() => setComposerOpen(true)}
+            onRefresh={refresh}
           />
         )}
 
@@ -364,6 +365,7 @@ export function CreaGuardApp() {
                   <option value="manual">Manual review</option>
                   <option value="discord">Discord</option>
                   <option value="telegram">Telegram</option>
+                  <option value="twitch">Twitch</option>
                   <option value="youtube">YouTube</option>
                   <option value="instagram">Instagram</option>
                 </select>
@@ -730,9 +732,43 @@ function IncidentsView(props: {
   loading: boolean;
   onSelect: (id: string) => void;
   onCompose: () => void;
+  onRefresh: () => Promise<void>;
 }) {
   const [filter, setFilter] = useState<string>("all");
+  const [videoUrl, setVideoUrl] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
   const filtered = props.incidents.filter((item) => filter === "all" || item.status === filter);
+
+  async function importVideo() {
+    if (!videoUrl.trim() || importing) return;
+    setImporting(true);
+    setImportMessage(null);
+    try {
+      const res = await fetch("/api/youtube", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ videoUrl: videoUrl.trim() }),
+      });
+      const data = (await res.json()) as {
+        error?: string;
+        analyzed?: number;
+        remaining?: number;
+        total?: number;
+      };
+      if (!res.ok) throw new Error(data.error ?? "Failed to import comments.");
+      await props.onRefresh();
+      const remaining = data.remaining ?? 0;
+      setImportMessage(
+        `Analyzed ${data.analyzed ?? 0} of ${data.total ?? 0} comments${remaining > 0 ? ` — ${remaining} still queued, run the import again to continue.` : "."}`,
+      );
+      setVideoUrl("");
+    } catch (err) {
+      setImportMessage(err instanceof Error ? err.message : "Failed to import comments.");
+    } finally {
+      setImporting(false);
+    }
+  }
   return (
     <div className="cg-page">
       <section className="cg-page-head">
@@ -743,6 +779,26 @@ function IncidentsView(props: {
         </div>
         <button className="cg-btn primary" onClick={props.onCompose}>Review a message</button>
       </section>
+
+      <div className="cg-import">
+        <div className="cg-import-main">
+          <strong>Import YouTube comments</strong>
+          <p>Paste a video link — its comments run through the same analysis pipeline.</p>
+        </div>
+        <input
+          placeholder="https://youtube.com/watch?v=…"
+          value={videoUrl}
+          onChange={(event) => setVideoUrl(event.target.value)}
+        />
+        <button
+          className="cg-btn primary"
+          disabled={!videoUrl.trim() || importing}
+          onClick={importVideo}
+        >
+          {importing ? "Importing…" : "Import"}
+        </button>
+      </div>
+      {importMessage && <p className="cg-import-result">{importMessage}</p>}
 
       <div className="cg-filters">
         {[
@@ -876,6 +932,30 @@ function SettingsView(props: { status: SystemStatus | null; onRefresh: () => voi
       detail: props.status?.minds ? "Connected" : "Not configured",
       ok: Boolean(props.status?.minds),
       hint: "Set MINDS_BUILDER_API_KEY and MINDS_MIND_ID to relay cases to your Mind.",
+    },
+    {
+      label: "Telegram bot",
+      detail: props.status?.channels.telegram ? "Connected" : "Not configured",
+      ok: Boolean(props.status?.channels.telegram),
+      hint: "Set TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_SECRET, then run scripts/setup-telegram.mjs.",
+    },
+    {
+      label: "Twitch EventSub",
+      detail: props.status?.channels.twitch ? "Connected" : "Not configured",
+      ok: Boolean(props.status?.channels.twitch),
+      hint: "Set TWITCH_CLIENT_ID, TWITCH_CLIENT_SECRET, TWITCH_EVENTSUB_SECRET, then run scripts/setup-twitch.mjs.",
+    },
+    {
+      label: "YouTube import",
+      detail: props.status?.channels.youtube ? "Connected" : "Not configured",
+      ok: Boolean(props.status?.channels.youtube),
+      hint: "Set YOUTUBE_API_KEY, then paste a video link on the Incidents page.",
+    },
+    {
+      label: "Instagram poll",
+      detail: props.status?.channels.instagram ? "Connected" : "Not configured",
+      ok: Boolean(props.status?.channels.instagram),
+      hint: "Set INSTAGRAM_ACCESS_TOKEN (Business/Creator account) and point a cron at POST /api/instagram.",
     },
     {
       label: "Scheduled follow-up",

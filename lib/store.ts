@@ -8,6 +8,7 @@ type StorageMode = "redis" | "file" | "memory";
 const KV_KEYS = {
   incidents: "creaguard:incidents",
   policy: "creaguard:policy",
+  seen: "creaguard:seen",
 } as const;
 
 function redisCredentials() {
@@ -132,10 +133,59 @@ export async function savePolicy(content: string): Promise<Policy> {
   return policy;
 }
 
+/**
+ * Returns only the ids that have not been processed yet for a platform
+ * (Twitch events, Instagram comments) and records them so redelivered
+ * webhooks and repeated polls never create duplicate incidents.
+ */
+export async function dedupeSeen(platform: string, ids: string[]): Promise<string[]> {
+  if (ids.length === 0) return [];
+  const mode = storageMode();
+  const read = async (): Promise<Record<string, string[]>> => {
+    if (mode === "redis") {
+      return (await redisClient()?.get<Record<string, string[]>>(KV_KEYS.seen)) ?? {};
+    }
+    if (mode === "file") return readFileJson<Record<string, string[]>>("seen.json", {});
+    return globalThis.__CREAGUARD_SEEN__ ?? {};
+  };
+  const write = async (seen: Record<string, string[]>) => {
+    if (mode === "redis") {
+      await redisClient()?.set(KV_KEYS.seen, seen);
+      return;
+    }
+    if (mode === "file") {
+      writeFileJson("seen.json", seen);
+      return;
+    }
+    globalThis.__CREAGUARD_SEEN__ = seen;
+  };
+
+  const seen = await read();
+  const existing = new Set(seen[platform] ?? []);
+  const fresh = ids.filter((id) => !existing.has(id));
+  if (fresh.length > 0) {
+    seen[platform] = [...(seen[platform] ?? []), ...fresh].slice(-1000);
+    await write(seen);
+  }
+  return fresh;
+}
+
 export async function systemStatus(): Promise<SystemStatus> {
   return {
     storage: storageMode(),
     featherless: Boolean(process.env.FEATHERLESS_API_KEY),
     minds: Boolean(process.env.MINDS_BUILDER_API_KEY && process.env.MINDS_MIND_ID),
+    channels: {
+      telegram: Boolean(
+        process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_BOT_SECRET,
+      ),
+      twitch: Boolean(
+        process.env.TWITCH_CLIENT_ID &&
+          process.env.TWITCH_CLIENT_SECRET &&
+          process.env.TWITCH_EVENTSUB_SECRET,
+      ),
+      youtube: Boolean(process.env.YOUTUBE_API_KEY),
+      instagram: Boolean(process.env.INSTAGRAM_ACCESS_TOKEN),
+    },
   };
 }

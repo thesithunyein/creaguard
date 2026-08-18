@@ -1081,6 +1081,55 @@ img {
   margin-bottom: 14px;
 }
 
+.cg-import {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.cg-import-main {
+  flex: 1;
+}
+
+.cg-import-main strong {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 3px;
+}
+
+.cg-import-main p {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.cg-import input {
+  width: 280px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 11px 13px;
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--surface);
+  outline: none;
+}
+
+.cg-import input:focus {
+  border-color: rgba(76, 209, 55, 0.5);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.cg-import-result {
+  margin: -2px 0 14px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
 .cg-filter {
   padding: 8px 14px;
   border-radius: 9px;
@@ -1836,6 +1885,13 @@ img {
   .cg-split,
   .cg-policy-split {
     grid-template-columns: 1fr;
+  }
+  .cg-import {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .cg-import input {
+    width: 100%;
   }
   .cg-mainnav {
     display: none;

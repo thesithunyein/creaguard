@@ -2,22 +2,12 @@ import { NextResponse } from "next/server";
 import { createPublicKey, verify } from "node:crypto";
 import { waitUntil } from "@vercel/functions";
 import { processIncomingMessage } from "@/lib/intake";
-import type { RiskCategory } from "@/lib/types";
+import { CATEGORY_LABELS, verdictFor } from "@/lib/verdict";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
-
-const CATEGORY_LABELS: Record<RiskCategory, string> = {
-  threat: "🚨 Threat",
-  doxxing: "⚠️ Doxxing",
-  impersonation: "👤 Impersonation",
-  scam: "💰 Scam",
-  harassment: "🔁 Harassment",
-  criticism: "💬 Criticism",
-  other: "❔ Unclassified",
-};
 
 /** Verifies the Discord Ed25519 request signature using the app public key. */
 function verifyDiscordSignature(
@@ -128,16 +118,10 @@ export async function POST(request: Request) {
         try {
           const { incident, status } = await reviewAndCreate(message, authorId);
           const label = CATEGORY_LABELS[incident.category] ?? incident.category;
-          const verdict =
-            status === "needs_review"
-              ? "**Escalated for human review.** Your Mind is reviewing this case now — open the dashboard to see its recommendation and approve."
-              : status === "quarantined"
-                ? "**Auto-quarantined** — this is an obvious scam with high confidence, so it was hidden from the main queue automatically. You can still review or restore it in the dashboard."
-                : "**Monitoring** — low risk, no action needed.";
           const content = [
             `${label} — risk ${incident.riskScore}/100 (severity ${incident.severity}/5)`,
             `> ${message}`,
-            verdict,
+            `**${verdictFor(status)}**`,
           ].join("\n");
           await patchInteraction(interactionToken, content);
         } catch {

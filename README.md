@@ -15,6 +15,7 @@ CreaGuard is a real, API-backed web application built for the **Moderation & Com
 - **Scheduled follow-ups** — `POST /api/followups` promotes due unresolved cases back to review (protect the endpoint with `CRON_SECRET`).
 - **Minds relay** — with `MINDS_BUILDER_API_KEY` and `MINDS_MIND_ID`, a case is relayed to your Mind through the official `@animocabrands/minds-client-lib`. The relay is non-blocking: the case is sent immediately, the conversation alias is stored on the incident, and the Mind's reply is read back from conversation history into a live **Mind review** panel in the case drawer. This proves cross-session memory and continuity: the Mind sees every prior case in the same conversation.
 - **Decision feedback loop** — when you resolve or dismiss a case with a decision note, the note is sent back to your Mind as the creator's standard for similar cases. The Mind needs less human input over time.
+- **Multi-channel intake** — every channel funnels into one shared pipeline (`lib/intake.ts`): manual paste, Discord `/review`, Telegram bot messages, Twitch chat via EventSub webhooks, YouTube comments imported from a video link, and Instagram comments polled from the Graph API. Platform differences are intake only — analysis, risk, quarantine, and the Mind are identical everywhere.
 
 ## Stack
 
@@ -44,7 +45,12 @@ Without any environment variables, the app runs with a local file store and manu
 | `FEATHERLESS_API_KEY` | Real message classification |
 | `FEATHERLESS_MODEL` | Optional model override (default `Qwen/Qwen2.5-7B-Instruct`) |
 | `MINDS_BUILDER_API_KEY` / `MINDS_MIND_ID` | Relay cases to a Minds agent |
-| `CRON_SECRET` | Bearer secret for the follow-up endpoint |
+| `CRON_SECRET` | Bearer secret for the follow-up and Instagram poll endpoints |
+| `DISCORD_BOT_TOKEN` / `DISCORD_APPLICATION_ID` / `DISCORD_PUBLIC_KEY` | Discord `/review` slash command |
+| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_BOT_SECRET` | Telegram bot webhook (run `scripts/setup-telegram.mjs`) |
+| `TWITCH_CLIENT_ID` / `TWITCH_CLIENT_SECRET` / `TWITCH_EVENTSUB_SECRET` | Twitch chat EventSub webhooks (run `scripts/setup-twitch.mjs`) |
+| `YOUTUBE_API_KEY` | YouTube video-URL comment import |
+| `INSTAGRAM_ACCESS_TOKEN` | Instagram comment polling (Business/Creator account) |
 
 Legacy Vercel KV names (`KV_REST_API_URL` / `KV_REST_API_TOKEN`) are also accepted for the Redis connection.
 
@@ -59,24 +65,53 @@ Legacy Vercel KV names (`KV_REST_API_URL` / `KV_REST_API_TOKEN`) are also accept
 | `PATCH` | `/api/incidents/[id]` | Update status, add a note, relay to Minds, or teach the Mind a decision |
 | `GET` / `PUT` | `/api/policy` | Read or save the safety policy |
 | `POST` | `/api/followups` | Promote due unresolved cases (authenticated) |
+| `POST` | `/api/telegram` | Telegram bot webhook (set via `scripts/setup-telegram.mjs`) |
+| `GET` / `POST` | `/api/twitch/eventsub` | Twitch EventSub challenge + chat events |
+| `POST` | `/api/youtube` | Import and analyze comments of a YouTube video URL |
+| `GET` / `POST` | `/api/instagram` | Poll Instagram comments (manual or cron, authenticated) |
 
 ## Architecture
 
 ```text
-Community event
+Discord /review · Telegram bot · Twitch chat · YouTube video URL · Instagram poll · manual paste
       ↓
-CreaGuard backend (validation + redaction boundaries)
+Shared intake pipeline (lib/intake.ts): analyze → risk score → auto-handling tier → store
       ↓
 Featherless classification (optional, strict JSON)
       ↓
 Incident ledger (Upstash Redis / local file)
       ↓
-Minds relay (optional, official client)
+Minds relay (optional, official client) → reply read back into the case drawer
       ↓
 Deterministic safety gates + human review
       ↓
+Creator decision → sent back to the Mind (feedback loop)
+      ↓
 Scheduled follow-up endpoint
 ```
+
+## Connecting channels
+
+Each channel is optional and reports its real connection state in **Settings**. Set the env vars above, deploy, then run the setup scripts:
+
+```bash
+# Discord: create a bot + slash command in the Developer Portal (no script needed)
+
+# Telegram: create a bot with @BotFather, then point it at the deployed app
+TELEGRAM_BOT_TOKEN=... TELEGRAM_BOT_SECRET=... \
+TELEGRAM_WEBHOOK_URL=https://your-app.vercel.app/api/telegram \
+node scripts/setup-telegram.mjs
+
+# Twitch: create an app at dev.twitch.tv, authorize your channel, subscribe to chat
+TWITCH_CLIENT_ID=... TWITCH_CLIENT_SECRET=... TWITCH_EVENTSUB_SECRET=... \
+TWITCH_WEBHOOK_URL=https://your-app.vercel.app/api/twitch/eventsub \
+node scripts/setup-twitch.mjs
+
+# YouTube: paste a video URL on the Incidents page (YOUTUBE_API_KEY only)
+# Instagram: set INSTAGRAM_ACCESS_TOKEN, then POST /api/instagram (cron or manual)
+```
+
+Twitch and Instagram deliveries are deduplicated by message/comment id, so redelivered webhooks and repeated polls never create duplicate incidents. Imports and polls run on a short time budget and continue where they left off on the next call.
 
 ### Responsibility split
 

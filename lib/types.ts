@@ -61,4 +61,10 @@ export interface SystemStatus {
   storage: "redis" | "file" | "memory";
   featherless: boolean;
   minds: boolean;
+  channels: {
+    telegram: boolean;
+    twitch: boolean;
+    youtube: boolean;
+    instagram: boolean;
+  };
 }
