@@ -32,6 +32,14 @@ function safeId(workspaceId: string): string {
   return workspaceId.replace(/[^a-zA-Z0-9._-]/g, "-") || "demo";
 }
 
+// Keys used before workspaces were introduced. The demo workspace reads
+// these as a fallback so pre-auth data stays visible.
+const LEGACY_KEYS = {
+  incidents: "creaguard:incidents",
+  policy: "creaguard:policy",
+  seen: "creaguard:seen",
+} as const;
+
 function incidentsKey(workspaceId: string): string {
   return `creaguard:incidents:${workspaceId}`;
 }
@@ -82,12 +90,24 @@ function writeFileJson(name: string, value: unknown): void {
 async function readIncidents(workspaceId: string): Promise<Incident[]> {
   const mode = storageMode();
   if (mode === "redis") {
-    return (
-      (await redisClient()?.get<Incident[]>(incidentsKey(workspaceId))) ?? []
-    );
+    const client = redisClient();
+    const fresh = await client?.get<Incident[]>(incidentsKey(workspaceId));
+    if (fresh != null) return fresh;
+    if (workspaceId === "demo") {
+      return (await client?.get<Incident[]>(LEGACY_KEYS.incidents)) ?? [];
+    }
+    return [];
   }
   if (mode === "file") {
-    return readFileJson<Incident[]>(incidentsFile(workspaceId), []);
+    const fresh = readFileJson<Incident[] | null>(
+      incidentsFile(workspaceId),
+      null,
+    );
+    if (fresh != null) return fresh;
+    if (workspaceId === "demo") {
+      return readFileJson<Incident[]>("incidents.json", []);
+    }
+    return [];
   }
   return memoryBucket(workspaceId).incidents ?? [];
 }
@@ -111,13 +131,23 @@ async function writeIncidents(
 async function readPolicy(workspaceId: string): Promise<Policy> {
   const mode = storageMode();
   if (mode === "redis") {
-    return (
-      (await redisClient()?.get<Policy>(policyKey(workspaceId))) ??
-      defaultPolicy()
-    );
+    const client = redisClient();
+    const fresh = await client?.get<Policy>(policyKey(workspaceId));
+    if (fresh != null) return fresh;
+    if (workspaceId === "demo") {
+      return (
+        (await client?.get<Policy>(LEGACY_KEYS.policy)) ?? defaultPolicy()
+      );
+    }
+    return defaultPolicy();
   }
   if (mode === "file") {
-    return readFileJson<Policy>(policyFile(workspaceId), defaultPolicy());
+    const fresh = readFileJson<Policy | null>(policyFile(workspaceId), null);
+    if (fresh != null) return fresh;
+    if (workspaceId === "demo") {
+      return readFileJson<Policy>("policy.json", defaultPolicy());
+    }
+    return defaultPolicy();
   }
   return memoryBucket(workspaceId).policy ?? defaultPolicy();
 }
@@ -143,14 +173,28 @@ async function readSeen(
 ): Promise<Record<string, string[]>> {
   const mode = storageMode();
   if (mode === "redis") {
-    return (
-      (await redisClient()?.get<Record<string, string[]>>(
-        seenKey(workspaceId),
-      )) ?? {}
+    const client = redisClient();
+    const fresh = await client?.get<Record<string, string[]>>(
+      seenKey(workspaceId),
     );
+    if (fresh != null) return fresh;
+    if (workspaceId === "demo") {
+      return (
+        (await client?.get<Record<string, string[]>>(LEGACY_KEYS.seen)) ?? {}
+      );
+    }
+    return {};
   }
   if (mode === "file") {
-    return readFileJson<Record<string, string[]>>(seenFile(workspaceId), {});
+    const fresh = readFileJson<Record<string, string[]> | null>(
+      seenFile(workspaceId),
+      null,
+    );
+    if (fresh != null) return fresh;
+    if (workspaceId === "demo") {
+      return readFileJson<Record<string, string[]>>("seen.json", {});
+    }
+    return {};
   }
   return memoryBucket(workspaceId).seen ?? {};
 }
