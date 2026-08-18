@@ -19,6 +19,11 @@ export async function currentWorkspaceId(): Promise<string> {
   if (!clerkEnabled()) return defaultWorkspaceId();
   try {
     const { userId } = await auth();
+    // When a fixed workspace is configured (single-tenant deployment), the
+    // signed-in creator resolves to it too — otherwise the dashboard and the
+    // channel webhooks (which have no session) would read/write different
+    // workspaces and the creator would see an empty dashboard.
+    if (process.env.WORKSPACE_ID?.trim()) return defaultWorkspaceId();
     return userId ?? defaultWorkspaceId();
   } catch {
     return defaultWorkspaceId();
