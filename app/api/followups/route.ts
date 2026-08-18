@@ -21,7 +21,10 @@ export async function POST(request: Request) {
       incident.followUpAt &&
       new Date(incident.followUpAt).getTime() <= now.getTime() &&
       incident.status !== "resolved" &&
-      incident.status !== "dismissed",
+      incident.status !== "dismissed" &&
+      // Auto-quarantined cases are already handled; promoting them back
+      // to review would defeat the auto-handling tier.
+      incident.status !== "quarantined",
   );
 
   const policy = await getPolicy();

@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { getIncident, getPolicy, saveIncident } from "@/lib/store";
-import { fetchMindsReply, sendToMinds } from "@/lib/minds";
+import {
+  fetchMindsReply,
+  sendDecisionToMinds,
+  sendToMinds,
+} from "@/lib/minds";
 import type { IncidentStatus } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -9,6 +13,7 @@ export const dynamic = "force-dynamic";
 const ALLOWED_STATUSES: IncidentStatus[] = [
   "needs_review",
   "monitoring",
+  "quarantined",
   "resolved",
   "dismissed",
 ];
@@ -55,6 +60,7 @@ export async function PATCH(
       status?: unknown;
       decisionNote?: unknown;
       relayToMinds?: unknown;
+      teachMind?: unknown;
     };
     const status = ALLOWED_STATUSES.includes(body.status as IncidentStatus)
       ? (body.status as IncidentStatus)
@@ -72,13 +78,21 @@ export async function PATCH(
     await saveIncident(incident);
 
     let minds = null;
+    const terminalDecision =
+      status === "resolved" || status === "dismissed";
     if (body.relayToMinds === true) {
+      // Relay the case to the Mind for review.
       const policy = await getPolicy();
       minds = await sendToMinds(policy, incident);
       if (minds.alias) {
         incident.mindsAlias = minds.alias;
         await saveIncident(incident);
       }
+    } else if (decisionNote && terminalDecision && body.teachMind !== false) {
+      // Feedback loop: the creator's terminal decision is sent back to
+      // the Mind so it learns their standards for similar cases.
+      const policy = await getPolicy();
+      minds = await sendDecisionToMinds(policy, incident, decisionNote);
     }
 
     return NextResponse.json({ incident, minds });

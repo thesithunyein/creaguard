@@ -1,16 +1,8 @@
 import { NextResponse } from "next/server";
 import { createPublicKey, verify } from "node:crypto";
 import { waitUntil } from "@vercel/functions";
-import { analyzeMessage } from "@/lib/analyze";
-import { newId } from "@/lib/ids";
-import { sendToMinds } from "@/lib/minds";
-import {
-  computeFollowUpAt,
-  computeRisk,
-  requiresHumanReview,
-} from "@/lib/risk";
-import { getIncidents, getPolicy, saveIncident } from "@/lib/store";
-import type { Incident, IncidentEvent, RiskCategory } from "@/lib/types";
+import { processIncomingMessage } from "@/lib/intake";
+import type { RiskCategory } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,59 +45,10 @@ function verifyDiscordSignature(
 }
 
 async function reviewAndCreate(message: string, authorId: string) {
-  const classification = await analyzeMessage(message, authorId);
-  const existing = await getIncidents();
-  const related = existing.filter(
-    (item) =>
-      authorId && item.events.some((event) => event.authorId === authorId),
-  );
-
-  const status = requiresHumanReview(classification)
-    ? "needs_review"
-    : "monitoring";
-  const { score, severity } = computeRisk(
-    classification,
-    related.reduce((sum, item) => sum + item.events.length, 0),
-  );
-  const followUpAt = computeFollowUpAt(score);
-
-  const now = new Date().toISOString();
-  const event: IncidentEvent = {
-    id: newId("evt"),
-    message,
-    authorId: authorId || undefined,
-    platform: "discord",
-    createdAt: now,
-    classification,
-  };
-
-  const incident: Incident = {
-    id: newId("inc"),
-    externalId: `INC-${Date.now().toString(36).toUpperCase()}`,
-    events: [event],
-    status,
-    severity,
-    riskScore: score,
-    category: classification.category,
-    createdAt: now,
-    updatedAt: now,
-    followUpAt: followUpAt || undefined,
-  };
-
-  await saveIncident(incident);
-
-  // Autonomous follow-up: relay high-risk Discord messages to the Mind
-  // immediately, no human click required.
-  if (status === "needs_review") {
-    const policy = await getPolicy();
-    const relay = await sendToMinds(policy, incident);
-    if (relay.alias) {
-      incident.mindsAlias = relay.alias;
-      await saveIncident(incident);
-    }
-  }
-
-  return { incident, status };
+  // Same intake pipeline as every other channel (manual paste, Telegram,
+  // webhooks): analyze -> risk score -> auto-handling tier -> store ->
+  // autonomous Mind relay for high-risk cases.
+  return processIncomingMessage(message, authorId, "discord");
 }
 
 async function patchInteraction(interactionToken: string, content: string) {
@@ -185,13 +128,16 @@ export async function POST(request: Request) {
         try {
           const { incident, status } = await reviewAndCreate(message, authorId);
           const label = CATEGORY_LABELS[incident.category] ?? incident.category;
-          const needsReview = status === "needs_review";
+          const verdict =
+            status === "needs_review"
+              ? "**Escalated for human review.** Your Mind is reviewing this case now — open the dashboard to see its recommendation and approve."
+              : status === "quarantined"
+                ? "**Auto-quarantined** — this is an obvious scam with high confidence, so it was hidden from the main queue automatically. You can still review or restore it in the dashboard."
+                : "**Monitoring** — low risk, no action needed.";
           const content = [
             `${label} — risk ${incident.riskScore}/100 (severity ${incident.severity}/5)`,
             `> ${message}`,
-            needsReview
-              ? "**Escalated for human review.** Your Mind is reviewing this case now — open the dashboard to see its recommendation and approve."
-              : "**Monitoring** — low risk, no action needed.",
+            verdict,
           ].join("\n");
           await patchInteraction(interactionToken, content);
         } catch {

@@ -25,6 +25,8 @@
   --amber-soft: rgba(251, 191, 36, 0.12);
   --blue: #60a5fa;
   --blue-soft: rgba(96, 165, 250, 0.12);
+  --violet: #a78bfa;
+  --violet-soft: rgba(167, 139, 250, 0.12);
   --green: #4ade80;
   --green-soft: rgba(74, 222, 128, 0.12);
   --radius: 16px;
@@ -815,7 +817,7 @@ img {
 
 .cg-stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 14px;
   margin-bottom: 18px;
 }
@@ -849,6 +851,7 @@ img {
 .cg-stat-icon.tone-violet { background: var(--accent-soft); color: var(--accent); }
 .cg-stat-icon.tone-amber { background: var(--amber-soft); color: var(--amber); }
 .cg-stat-icon.tone-blue { background: var(--blue-soft); color: var(--blue); }
+.cg-stat-icon.tone-quarantine { background: var(--violet-soft); color: var(--violet); }
 .cg-stat-icon.tone-green { background: var(--green-soft); color: var(--green); }
 
 .cg-stat-value {
@@ -933,6 +936,7 @@ img {
 
 .cg-case-mark.tone-critical { background: var(--red-soft); color: var(--red); }
 .cg-case-mark.tone-high { background: var(--amber-soft); color: var(--amber); }
+.cg-case-mark.tone-quarantine { background: var(--violet-soft); color: var(--violet); }
 .cg-case-mark.tone-safe { background: var(--green-soft); color: var(--green); }
 .cg-case-mark.tone-neutral { background: var(--surface-2); color: var(--muted); }
 
@@ -981,6 +985,7 @@ img {
 
 .cg-tag.tone-critical { background: var(--red-soft); color: var(--red); }
 .cg-tag.tone-high { background: var(--amber-soft); color: var(--amber); }
+.cg-tag.tone-quarantine { background: var(--violet-soft); color: var(--violet); }
 .cg-tag.tone-safe { background: var(--green-soft); color: var(--green); }
 .cg-tag.tone-neutral { background: var(--surface-2); color: var(--muted); }
 
@@ -1426,6 +1431,7 @@ img {
 
 .cg-risk-banner.tone-critical { background: var(--red-soft); }
 .cg-risk-banner.tone-high { background: var(--amber-soft); }
+.cg-risk-banner.tone-quarantine { background: var(--violet-soft); }
 .cg-risk-banner.tone-safe { background: var(--green-soft); }
 .cg-risk-banner.tone-neutral { background: var(--surface-2); }
 
@@ -1442,6 +1448,7 @@ img {
 
 .cg-risk-banner.tone-critical > span { background: rgba(248, 113, 113, 0.25); color: var(--red); }
 .cg-risk-banner.tone-high > span { background: rgba(251, 191, 36, 0.25); color: var(--amber); }
+.cg-risk-banner.tone-quarantine > span { background: rgba(167, 139, 250, 0.25); color: var(--violet); }
 .cg-risk-banner.tone-safe > span { background: rgba(74, 222, 128, 0.25); color: var(--green); }
 .cg-risk-banner.tone-neutral > span { background: var(--surface-2); color: var(--muted); }
 
@@ -1542,6 +1549,21 @@ img {
   background: var(--surface);
   border-radius: 10px;
   border: 1px solid var(--line);
+}
+
+.cg-drawer-note {
+  padding: 0;
+}
+
+.cg-drawer-note textarea {
+  min-height: 64px;
+}
+
+.cg-drawer-note-hint {
+  margin: -2px 0 0;
+  font-size: 10px;
+  line-height: 1.55;
+  color: var(--faint);
 }
 
 .cg-minds-review {

@@ -1,15 +1,11 @@
 import { NextResponse } from "next/server";
-import { analyzeMessage } from "@/lib/analyze";
-import { newId } from "@/lib/ids";
-import { sendToMinds } from "@/lib/minds";
-import { computeFollowUpAt, computeRisk, requiresHumanReview } from "@/lib/risk";
-import { getIncidents, getPolicy, saveIncident } from "@/lib/store";
-import type { Incident, IncidentEvent } from "@/lib/types";
+import { processIncomingMessage } from "@/lib/intake";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const { getIncidents } = await import("@/lib/store");
   const incidents = await getIncidents();
   return NextResponse.json({ incidents });
 }
@@ -42,63 +38,16 @@ export async function POST(request: Request) {
       );
     }
 
-    const classification = await analyzeMessage(message, authorId);
-    const existing = await getIncidents();
-    const related = existing.filter(
-      (item) =>
-        authorId &&
-        item.events.some((event) => event.authorId === authorId),
-    );
-
-    const status = requiresHumanReview(classification)
-      ? "needs_review"
-      : "monitoring";
-    const { score, severity } = computeRisk(
-      classification,
-      related.reduce((sum, item) => sum + item.events.length, 0),
-    );
-    const followUpAt = computeFollowUpAt(score);
-
-    const now = new Date().toISOString();
-    const event: IncidentEvent = {
-      id: newId("evt"),
+    const { incident, status, relatedCount } = await processIncomingMessage(
       message,
-      authorId: authorId || undefined,
+      authorId,
       platform,
-      createdAt: now,
-      classification,
-    };
+    );
 
-    const incident: Incident = {
-      id: newId("inc"),
-      externalId: `INC-${Date.now().toString(36).toUpperCase()}`,
-      events: [event],
-      status,
-      severity,
-      riskScore: score,
-      category: classification.category,
-      createdAt: now,
-      updatedAt: now,
-      followUpAt: followUpAt || undefined,
-    };
-
-    await saveIncident(incident);
-
-    // Autonomous follow-up: when a message needs human review, relay it to
-    // the creator's Mind immediately — no manual click required.
-    let mindsRelayed = false;
-    if (status === "needs_review") {
-      const policy = await getPolicy();
-      const relay = await sendToMinds(policy, incident);
-      if (relay.alias) {
-        incident.mindsAlias = relay.alias;
-        await saveIncident(incident);
-        mindsRelayed = true;
-      }
-    }
+    const mindsRelayed = Boolean(incident.mindsAlias);
 
     return NextResponse.json(
-      { incident, relatedCount: related.length, mindsRelayed },
+      { incident, status, relatedCount, mindsRelayed },
       { status: 201 },
     );
   } catch (error) {

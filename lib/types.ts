@@ -10,6 +10,7 @@ export type RiskCategory =
 export type IncidentStatus =
   | "needs_review"
   | "monitoring"
+  | "quarantined"
   | "resolved"
   | "dismissed";
 

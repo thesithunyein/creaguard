@@ -120,6 +120,48 @@ export async function followUpToMinds(
 }
 
 /**
+ * Sends the creator's decision back to the Mind so it learns the
+ * creator's standards. This is the feedback loop that makes the Mind
+ * need less human input over time.
+ */
+export async function sendDecisionToMinds(
+  policy: Policy,
+  incident: Incident,
+  decision: string,
+): Promise<MindsResult> {
+  if (!mindsConfig()) {
+    return { connected: false, message: "Minds is not configured." };
+  }
+
+  try {
+    const client = await mindsClient();
+    const config = mindsConfig();
+    if (!config) return { connected: false, message: "Minds is not configured." };
+
+    const alias = incident.mindsAlias ?? incidentAlias(incident);
+    await client.ensureConversation(alias, config.mindId);
+
+    const latest = incident.events.at(-1);
+    const message = [
+      `Creator decision for ${incident.externalId}: ${decision}`,
+      `Category ${incident.category}, severity ${incident.severity}, risk ${incident.riskScore}/100.`,
+      `Message: ${latest?.message ?? ""}`,
+      `Policy: ${policy.content}`,
+      `Remember this decision as the creator's standard for similar cases.`,
+    ].join("\n");
+
+    await client.sendMessage({ alias, messageText: message });
+
+    return { connected: true, alias, message: "Decision sent to your Mind." };
+  } catch (error) {
+    return {
+      connected: true,
+      error: error instanceof Error ? error.message : "Minds decision feedback failed.",
+    };
+  }
+}
+
+/**
  * Reads the latest reply from the creator's Mind in the conversation
  * history for this incident. Uses senderType (0|2 = Mind, 1 = human).
  */

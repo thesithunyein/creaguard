@@ -32,6 +32,21 @@ export function requiresHumanReview(
   return classification.severity >= 4;
 }
 
+/**
+ * Auto-handling tier: obvious scams with high confidence are quarantined
+ * automatically (hidden from the main queue, still reviewable) so busy
+ * creators never see obvious spam. Everything else keeps human review.
+ */
+export function shouldAutoQuarantine(
+  classification: Classification,
+): boolean {
+  return (
+    classification.category === "scam" &&
+    classification.confidence >= 0.9 &&
+    classification.severity >= 3
+  );
+}
+
 export function computeFollowUpAt(score: number, now = new Date()): string {
   const minutes = score >= 70 ? 24 * 60 : score >= 40 ? 3 * 24 * 60 : 0;
   if (minutes === 0) return "";

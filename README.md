@@ -10,9 +10,11 @@ CreaGuard is a real, API-backed web application built for the **Moderation & Com
 - **Real classification** — when `FEATHERLESS_API_KEY` is set, messages are classified through the Featherless API with strict JSON validation. Without the key, CreaGuard stores the case for manual review and never fabricates a result.
 - **Persistent storage** — incidents and the safety policy are stored in Upstash Redis when `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are configured, with a file-backed store for local development.
 - **Human-in-the-loop review** — cases move through `needs_review`, `monitoring`, `resolved`, and `dismissed`. Serious actions are never automated.
+- **Auto-quarantine tier** — obvious scams with high confidence are quarantined automatically: hidden from the main queue so busy creators never see obvious spam, but still reviewable and restorable.
 - **Risk scoring** — deterministic severity/confidence scoring with repetition weighting and follow-up scheduling.
 - **Scheduled follow-ups** — `POST /api/followups` promotes due unresolved cases back to review (protect the endpoint with `CRON_SECRET`).
 - **Minds relay** — with `MINDS_BUILDER_API_KEY` and `MINDS_MIND_ID`, a case is relayed to your Mind through the official `@animocabrands/minds-client-lib`. The relay is non-blocking: the case is sent immediately, the conversation alias is stored on the incident, and the Mind's reply is read back from conversation history into a live **Mind review** panel in the case drawer. This proves cross-session memory and continuity: the Mind sees every prior case in the same conversation.
+- **Decision feedback loop** — when you resolve or dismiss a case with a decision note, the note is sent back to your Mind as the creator's standard for similar cases. The Mind needs less human input over time.
 
 ## Stack
 
@@ -54,7 +56,7 @@ Legacy Vercel KV names (`KV_REST_API_URL` / `KV_REST_API_TOKEN`) are also accept
 | `GET` | `/api/incidents` | List incidents |
 | `POST` | `/api/incidents` | Analyze and create an incident |
 | `GET` | `/api/incidents/[id]` | Get one incident |
-| `PATCH` | `/api/incidents/[id]` | Update status, add a note, relay to Minds |
+| `PATCH` | `/api/incidents/[id]` | Update status, add a note, relay to Minds, or teach the Mind a decision |
 | `GET` / `PUT` | `/api/policy` | Read or save the safety policy |
 | `POST` | `/api/followups` | Promote due unresolved cases (authenticated) |
 
@@ -85,7 +87,7 @@ Scheduled follow-up endpoint
 
 ## Safety boundaries
 
-- Threat, doxxing, impersonation, and scam categories always require human review.
+- Threat, doxxing, impersonation, and scam categories always require human review — except obvious scams with ≥90% confidence, which are quarantined (hidden, never deleted or acted on).
 - Severity 4+ requires human review.
 - Automatic bans, automatic reporting, and evidence deletion are hard-blocked.
 - The classifier is advisory; it is not an emergency-response service.

@@ -68,6 +68,7 @@ export function CreaGuardApp() {
   const [toast, setToast] = useState<{ title: string; copy: string } | null>(null);
   const [mindsReply, setMindsReply] = useState<string | null>(null);
   const [mindsState, setMindsState] = useState<"idle" | "pending" | "reply" | "error">("idle");
+  const [decisionNote, setDecisionNote] = useState("");
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -114,8 +115,10 @@ export function CreaGuardApp() {
     if (!selectedId) {
       setMindsReply(null);
       setMindsState("idle");
+      setDecisionNote("");
       return;
     }
+    setDecisionNote("");
     let cancelled = false;
     async function loadMindsReply() {
       setMindsState("pending");
@@ -158,6 +161,7 @@ export function CreaGuardApp() {
 
   const needsReview = incidents.filter((item) => item.status === "needs_review").length;
   const monitoring = incidents.filter((item) => item.status === "monitoring").length;
+  const quarantined = incidents.filter((item) => item.status === "quarantined").length;
   const resolved = incidents.filter((item) => item.status === "resolved").length;
 
   async function submitIncident() {
@@ -191,13 +195,17 @@ export function CreaGuardApp() {
     }
   }
 
-  async function updateIncident(nextStatus: string, relayToMinds = false) {
+  async function updateIncident(nextStatus: string, relayToMinds = false, note = "") {
     if (!selected) return;
     try {
       const res = await fetch(`/api/incidents/${selected.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: nextStatus, relayToMinds }),
+        body: JSON.stringify({
+          status: nextStatus,
+          relayToMinds,
+          decisionNote: note || undefined,
+        }),
       });
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
@@ -206,9 +214,11 @@ export function CreaGuardApp() {
       await refresh();
       setMindsReply(null);
       setMindsState("pending");
+      setDecisionNote("");
+      const taught = note && (nextStatus === "resolved" || nextStatus === "dismissed");
       setToast({
         title: "Case updated",
-        copy: `${selected.externalId} is now ${nextStatus.replace("_", " ")}.`,
+        copy: `${selected.externalId} is now ${nextStatus.replace("_", " ")}${taught ? ". Your Mind was taught this decision." : "."}`,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update case.");
@@ -282,6 +292,7 @@ export function CreaGuardApp() {
             incidents={incidents}
             needsReview={needsReview}
             monitoring={monitoring}
+            quarantined={quarantined}
             resolved={resolved}
             loading={loading}
             onCompose={() => setComposerOpen(true)}
@@ -398,15 +409,19 @@ export function CreaGuardApp() {
                       ? "Needs your decision"
                       : selected.status === "monitoring"
                         ? "Monitoring"
-                        : selected.status === "resolved"
-                          ? "Resolved"
-                          : "Dismissed"}
+                        : selected.status === "quarantined"
+                          ? "Auto-quarantined"
+                          : selected.status === "resolved"
+                            ? "Resolved"
+                            : "Dismissed"}
                   </strong>
                   <p>
                     Risk score {selected.riskScore}/100 · severity {selected.severity}/5 ·{" "}
                     {selected.events.at(-1)?.classification?.confidence
                       ? `${Math.round((selected.events.at(-1)?.classification?.confidence ?? 0) * 100)}% confidence`
                       : "manual case"}
+                    {selected.status === "quarantined" &&
+                      " · obvious scam, auto-handled — you can still review or restore it"}
                   </p>
                 </div>
               </div>
@@ -444,6 +459,21 @@ export function CreaGuardApp() {
                   <p className="cg-decision-note">{selected.decisionNote}</p>
                 </>
               )}
+
+              <div className="cg-drawer-section">Your decision</div>
+              <label className="cg-field cg-drawer-note">
+                <span>Decision note — teach your Mind</span>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Confirmed ban: this account impersonates creators to run scams…"
+                  value={decisionNote}
+                  onChange={(event) => setDecisionNote(event.target.value)}
+                />
+              </label>
+              <p className="cg-drawer-note-hint">
+                When you resolve or dismiss with a note, your Mind learns your
+                standard for similar cases — no extra setup needed.
+              </p>
 
               <div className="cg-drawer-section">Mind review</div>
               <div className={`cg-minds-review ${mindsState}`}>
@@ -489,7 +519,10 @@ export function CreaGuardApp() {
               <button className="cg-btn ghost" onClick={() => updateIncident("monitoring")}>
                 <Icon name="clock" size={14} /> Monitor
               </button>
-              <button className="cg-btn ghost" onClick={() => updateIncident("resolved")}>
+              <button className="cg-btn ghost" onClick={() => updateIncident("dismissed", false, decisionNote)}>
+                <Icon name="x" size={14} /> Dismiss
+              </button>
+              <button className="cg-btn ghost" onClick={() => updateIncident("resolved", false, decisionNote)}>
                 <Icon name="check" size={14} /> Resolve
               </button>
               <button
@@ -520,6 +553,7 @@ function Overview(props: {
   incidents: Incident[];
   needsReview: number;
   monitoring: number;
+  quarantined: number;
   resolved: number;
   loading: boolean;
   onCompose: () => void;
@@ -592,6 +626,7 @@ function Overview(props: {
         <StatCard label="Open incidents" value={props.incidents.filter((i) => i.status !== "resolved" && i.status !== "dismissed").length} icon="inbox" tone="violet" />
         <StatCard label="Needs review" value={props.needsReview} icon="alert-triangle" tone="amber" />
         <StatCard label="Monitoring" value={props.monitoring} icon="clock" tone="blue" />
+        <StatCard label="Quarantined" value={props.quarantined} icon="eye-off" tone="quarantine" />
         <StatCard label="Resolved" value={props.resolved} icon="check-circle" tone="green" />
       </section>
 
@@ -714,6 +749,7 @@ function IncidentsView(props: {
           { key: "all", label: "All" },
           { key: "needs_review", label: "Needs review" },
           { key: "monitoring", label: "Monitoring" },
+          { key: "quarantined", label: "Quarantined" },
           { key: "resolved", label: "Resolved" },
           { key: "dismissed", label: "Dismissed" },
         ].map((item) => (
@@ -752,7 +788,7 @@ function IncidentsView(props: {
                 </span>
                 <span className="cg-score-pill">{incident.riskScore}</span>
                 <span>{categoryLabels[incident.category]}</span>
-                <span className={`cg-tag tone-${incident.status === "needs_review" ? "critical" : incident.status === "resolved" ? "safe" : "neutral"}`}>
+                <span className={`cg-tag tone-${incident.status === "needs_review" ? "critical" : incident.status === "resolved" ? "safe" : incident.status === "quarantined" ? "quarantine" : "neutral"}`}>
                   {incident.status.replace("_", " ")}
                 </span>
                 <span className="cg-muted">{relativeTime(incident.updatedAt)}</span>
