@@ -45,7 +45,7 @@ async function appToken() {
       grant_type: "client_credentials",
     }),
   });
-  const json = (await res.json()) as { access_token?: string };
+  const json = await res.json();
   if (!json.access_token) {
     console.error("Failed to get app token:", JSON.stringify(json));
     process.exit(1);
@@ -79,7 +79,7 @@ async function userToken() {
       redirect_uri: REDIRECT_URI,
     }),
   });
-  const json = (await res.json()) as { access_token?: string };
+  const json = await res.json();
   if (!json.access_token) {
     console.error("Failed to exchange code:", JSON.stringify(json));
     process.exit(1);
@@ -93,9 +93,7 @@ const [appAccessToken, userAccessToken] = await Promise.all([appToken(), userTok
 const usersRes = await fetch("https://api.twitch.tv/helix/users", {
   headers: { Authorization: `Bearer ${userAccessToken}`, "Client-Id": clientId },
 });
-const usersJson = (await usersRes.json()) as {
-  data?: Array<{ id?: string; login?: string; display_name?: string }>;
-};
+const usersJson = await usersRes.json();
 const user = usersJson.data?.[0];
 if (!user?.id) {
   console.error("Could not resolve the authorized user:", JSON.stringify(usersJson));

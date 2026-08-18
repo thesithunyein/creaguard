@@ -31,9 +31,6 @@ const response = await fetch(
     body: JSON.stringify({ url, secret_token: secret }),
   },
 );
-const json = (await response.json()) as {
-  ok?: boolean;
-  description?: string;
-};
+const json = await response.json();
 console.log(JSON.stringify(json, null, 2));
 if (!json.ok) process.exit(1);
