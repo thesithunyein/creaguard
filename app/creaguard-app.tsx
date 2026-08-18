@@ -52,6 +52,23 @@ function relativeTime(value: string): string {
   return `${days}d ago`;
 }
 
+/** Turns the Mind's HTML-formatted reply into readable plain text. */
+function mindReplyToText(html: string): string {
+  return html
+    .replace(/<li[^>]*>/gi, "\n• ")
+    .replace(/<\/(p|div|ul|ol|li|h[1-6])>/gi, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export function CreaGuardApp() {
   const [view, setView] = useState<View>("overview");
   const [incidents, setIncidents] = useState<Incident[]>([]);
@@ -491,7 +508,7 @@ export function CreaGuardApp() {
                     <span className="cg-minds-avatar"><Icon name="sparkles" size={14} /></span>
                     <div>
                       <strong>Your Mind replied</strong>
-                      <p className="cg-minds-reply-text">{mindsReply}</p>
+                      <p className="cg-minds-reply-text">{mindReplyToText(mindsReply)}</p>
                     </div>
                   </>
                 )}
