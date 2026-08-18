@@ -63,8 +63,6 @@ export interface SystemStatus {
   minds: boolean;
   channels: {
     telegram: boolean;
-    twitch: boolean;
     youtube: boolean;
-    instagram: boolean;
   };
 }

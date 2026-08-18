@@ -365,9 +365,7 @@ export function CreaGuardApp() {
                   <option value="manual">Manual review</option>
                   <option value="discord">Discord</option>
                   <option value="telegram">Telegram</option>
-                  <option value="twitch">Twitch</option>
                   <option value="youtube">YouTube</option>
-                  <option value="instagram">Instagram</option>
                 </select>
               </label>
             </div>
@@ -940,22 +938,10 @@ function SettingsView(props: { status: SystemStatus | null; onRefresh: () => voi
       hint: "Set TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_SECRET, then run scripts/setup-telegram.mjs.",
     },
     {
-      label: "Twitch EventSub",
-      detail: props.status?.channels.twitch ? "Connected" : "Not configured",
-      ok: Boolean(props.status?.channels.twitch),
-      hint: "Set TWITCH_CLIENT_ID, TWITCH_CLIENT_SECRET, TWITCH_EVENTSUB_SECRET, then run scripts/setup-twitch.mjs.",
-    },
-    {
       label: "YouTube import",
       detail: props.status?.channels.youtube ? "Connected" : "Not configured",
       ok: Boolean(props.status?.channels.youtube),
       hint: "Set YOUTUBE_API_KEY, then paste a video link on the Incidents page.",
-    },
-    {
-      label: "Instagram poll",
-      detail: props.status?.channels.instagram ? "Connected" : "Not configured",
-      ok: Boolean(props.status?.channels.instagram),
-      hint: "Set INSTAGRAM_ACCESS_TOKEN (Business/Creator account) and point a cron at POST /api/instagram.",
     },
     {
       label: "Scheduled follow-up",

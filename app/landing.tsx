@@ -43,8 +43,6 @@ const PLATFORMS = [
   { id: "youtube", label: "YouTube" },
   { id: "discord", label: "Discord" },
   { id: "telegram", label: "Telegram" },
-  { id: "instagram", label: "Instagram" },
-  { id: "twitch", label: "Twitch" },
 ];
 
 function useCountUp(target: number, durationMs = 2000, startDelay = 1200) {

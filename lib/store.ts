@@ -135,8 +135,8 @@ export async function savePolicy(content: string): Promise<Policy> {
 
 /**
  * Returns only the ids that have not been processed yet for a platform
- * (Twitch events, Instagram comments) and records them so redelivered
- * webhooks and repeated polls never create duplicate incidents.
+ * (e.g. YouTube comments) and records them so repeated imports never
+ * create duplicate incidents.
  */
 export async function dedupeSeen(platform: string, ids: string[]): Promise<string[]> {
   if (ids.length === 0) return [];
@@ -179,13 +179,7 @@ export async function systemStatus(): Promise<SystemStatus> {
       telegram: Boolean(
         process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_BOT_SECRET,
       ),
-      twitch: Boolean(
-        process.env.TWITCH_CLIENT_ID &&
-          process.env.TWITCH_CLIENT_SECRET &&
-          process.env.TWITCH_EVENTSUB_SECRET,
-      ),
       youtube: Boolean(process.env.YOUTUBE_API_KEY),
-      instagram: Boolean(process.env.INSTAGRAM_ACCESS_TOKEN),
     },
   };
 }

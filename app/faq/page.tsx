@@ -31,7 +31,7 @@ const FAQS = [
   },
   {
     q: "Which platforms are supported?",
-    a: "YouTube, Discord, Telegram, Instagram, and Twitch are on the roadmap. Today you can review messages manually; Discord and Telegram intake are rolling out next.",
+    a: "YouTube, Discord, and Telegram are live today, alongside manual review. Connect any of them and messages flow into one safety workspace — your Mind sees every case the same way, no matter where it came from.",
   },
   {
     q: "Is my data safe?",
