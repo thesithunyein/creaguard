@@ -2,8 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  SignedIn,
-  SignedOut,
   SignInButton,
   UserButton,
   useAuth,
@@ -87,16 +85,15 @@ function AuthArea({ onAuthChange }: { onAuthChange: () => void }) {
   }, [isSignedIn, onAuthChange]);
   return (
     <>
-      <SignedIn>
+      {isSignedIn ? (
         <UserButton />
-      </SignedIn>
-      <SignedOut>
+      ) : (
         <SignInButton mode="modal">
           <button className="cg-btn ghost" type="button">
             Sign in
           </button>
         </SignInButton>
-      </SignedOut>
+      )}
     </>
   );
 }

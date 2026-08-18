@@ -1,5 +1,7 @@
 import { CreaGuardApp } from "../creaguard-app";
 
+export const dynamic = "force-dynamic";
+
 export default function AppPage() {
   return (
     <CreaGuardApp
