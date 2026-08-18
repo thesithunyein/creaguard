@@ -85,6 +85,7 @@ export function CreaGuardApp() {
   const [toast, setToast] = useState<{ title: string; copy: string } | null>(null);
   const [mindsReply, setMindsReply] = useState<string | null>(null);
   const [mindsState, setMindsState] = useState<"idle" | "pending" | "reply" | "error">("idle");
+  const [mindsReload, setMindsReload] = useState(0);
   const [decisionNote, setDecisionNote] = useState("");
 
   const refresh = useCallback(async () => {
@@ -158,6 +159,12 @@ export function CreaGuardApp() {
             setMindsState("reply");
             return;
           }
+          // Low-risk cases are never relayed — stop polling right away
+          // instead of spinning for a full minute for a reply that can't come.
+          if (!data.incident?.mindsAlias) {
+            setMindsState("idle");
+            return;
+          }
           if (data.minds?.reply) {
             setMindsReply(data.minds.reply);
             setMindsState("reply");
@@ -178,7 +185,7 @@ export function CreaGuardApp() {
     return () => {
       cancelled = true;
     };
-  }, [selectedId]);
+  }, [selectedId, mindsReload]);
 
   const needsReview = incidents.filter((item) => item.status === "needs_review").length;
   const monitoring = incidents.filter((item) => item.status === "monitoring").length;
@@ -234,6 +241,8 @@ export function CreaGuardApp() {
       }
       await refresh();
       setDecisionNote("");
+      // After relaying a case, re-poll so the new Mind reply appears.
+      if (relayToMinds) setMindsReload((value) => value + 1);
       const taught = note && (nextStatus === "resolved" || nextStatus === "dismissed");
       setToast({
         title: "Case updated",
@@ -504,6 +513,14 @@ export function CreaGuardApp() {
                       <p className="cg-minds-reply-text">{mindReplyToText(shownMindsReply)}</p>
                     </div>
                   </>
+                ) : !selected.mindsAlias ? (
+                  <>
+                    <span><Icon name="send" size={14} /></span>
+                    <div>
+                      <strong>Not sent to your Mind</strong>
+                      <p>Low-risk case — it stays in monitoring. Use “Relay to Minds” if you want the Mind to review it.</p>
+                    </div>
+                  </>
                 ) : mindsState === "pending" ? (
                   <>
                     <span className="cg-minds-spinner" />
@@ -520,15 +537,15 @@ export function CreaGuardApp() {
                       <p>The case was relayed, but the reply could not be read. Check the Minds conversation for {selected.externalId}.</p>
                     </div>
                   </>
-                ) : !selected.mindsAlias ? (
+                ) : (
                   <>
                     <span><Icon name="send" size={14} /></span>
                     <div>
-                      <strong>Not relayed yet</strong>
-                      <p>Use “Relay to Minds” to send this case to your Mind for review.</p>
+                      <strong>Relayed to your Mind</strong>
+                      <p>Re-open this case if the reply hasn't appeared yet.</p>
                     </div>
                   </>
-                ) : null}
+                )}
               </div>
             </div>
             <div className="cg-drawer-actions">
