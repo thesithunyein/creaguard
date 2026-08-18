@@ -5,12 +5,6 @@ import type { Incident, Policy, SystemStatus } from "./types";
 
 type StorageMode = "redis" | "file" | "memory";
 
-const KV_KEYS = {
-  incidents: "creaguard:incidents",
-  policy: "creaguard:policy",
-  seen: "creaguard:seen",
-} as const;
-
 function redisCredentials() {
   const url =
     process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
@@ -34,6 +28,41 @@ function dataDir(): string {
   return join(process.cwd(), ".data");
 }
 
+function safeId(workspaceId: string): string {
+  return workspaceId.replace(/[^a-zA-Z0-9._-]/g, "-") || "demo";
+}
+
+function incidentsKey(workspaceId: string): string {
+  return `creaguard:incidents:${workspaceId}`;
+}
+function policyKey(workspaceId: string): string {
+  return `creaguard:policy:${workspaceId}`;
+}
+function seenKey(workspaceId: string): string {
+  return `creaguard:seen:${workspaceId}`;
+}
+function incidentsFile(workspaceId: string): string {
+  return `incidents-${safeId(workspaceId)}.json`;
+}
+function policyFile(workspaceId: string): string {
+  return `policy-${safeId(workspaceId)}.json`;
+}
+function seenFile(workspaceId: string): string {
+  return `seen-${safeId(workspaceId)}.json`;
+}
+
+interface MemoryBucket {
+  incidents?: Incident[];
+  policy?: Policy;
+  seen?: Record<string, string[]>;
+}
+
+function memoryBucket(workspaceId: string): MemoryBucket {
+  const all =
+    globalThis.__CREAGUARD_MEMORY__ ?? (globalThis.__CREAGUARD_MEMORY__ = {});
+  return all[workspaceId] ?? (all[workspaceId] = {});
+}
+
 function readFileJson<T>(name: string, fallback: T): T {
   try {
     const path = join(dataDir(), name);
@@ -50,48 +79,96 @@ function writeFileJson(name: string, value: unknown): void {
   writeFileSync(join(dir, name), JSON.stringify(value, null, 2), "utf-8");
 }
 
-async function readIncidents(): Promise<Incident[]> {
+async function readIncidents(workspaceId: string): Promise<Incident[]> {
   const mode = storageMode();
   if (mode === "redis") {
-    return (await redisClient()?.get<Incident[]>(KV_KEYS.incidents)) ?? [];
+    return (
+      (await redisClient()?.get<Incident[]>(incidentsKey(workspaceId))) ?? []
+    );
   }
-  if (mode === "file") return readFileJson<Incident[]>("incidents.json", []);
-  return globalThis.__CREAGUARD_INCIDENTS__ ?? [];
+  if (mode === "file") {
+    return readFileJson<Incident[]>(incidentsFile(workspaceId), []);
+  }
+  return memoryBucket(workspaceId).incidents ?? [];
 }
 
-async function writeIncidents(incidents: Incident[]): Promise<void> {
+async function writeIncidents(
+  workspaceId: string,
+  incidents: Incident[],
+): Promise<void> {
   const mode = storageMode();
   if (mode === "redis") {
-    await redisClient()?.set(KV_KEYS.incidents, incidents);
+    await redisClient()?.set(incidentsKey(workspaceId), incidents);
     return;
   }
   if (mode === "file") {
-    writeFileJson("incidents.json", incidents);
+    writeFileJson(incidentsFile(workspaceId), incidents);
     return;
   }
-  globalThis.__CREAGUARD_INCIDENTS__ = incidents;
+  memoryBucket(workspaceId).incidents = incidents;
 }
 
-async function readPolicy(): Promise<Policy> {
+async function readPolicy(workspaceId: string): Promise<Policy> {
   const mode = storageMode();
   if (mode === "redis") {
-    return (await redisClient()?.get<Policy>(KV_KEYS.policy)) ?? defaultPolicy();
+    return (
+      (await redisClient()?.get<Policy>(policyKey(workspaceId))) ??
+      defaultPolicy()
+    );
   }
-  if (mode === "file") return readFileJson<Policy>("policy.json", defaultPolicy());
-  return globalThis.__CREAGUARD_POLICY__ ?? defaultPolicy();
+  if (mode === "file") {
+    return readFileJson<Policy>(policyFile(workspaceId), defaultPolicy());
+  }
+  return memoryBucket(workspaceId).policy ?? defaultPolicy();
 }
 
-async function writePolicy(policy: Policy): Promise<void> {
+async function writePolicy(
+  workspaceId: string,
+  policy: Policy,
+): Promise<void> {
   const mode = storageMode();
   if (mode === "redis") {
-    await redisClient()?.set(KV_KEYS.policy, policy);
+    await redisClient()?.set(policyKey(workspaceId), policy);
     return;
   }
   if (mode === "file") {
-    writeFileJson("policy.json", policy);
+    writeFileJson(policyFile(workspaceId), policy);
     return;
   }
-  globalThis.__CREAGUARD_POLICY__ = policy;
+  memoryBucket(workspaceId).policy = policy;
+}
+
+async function readSeen(
+  workspaceId: string,
+): Promise<Record<string, string[]>> {
+  const mode = storageMode();
+  if (mode === "redis") {
+    return (
+      (await redisClient()?.get<Record<string, string[]>>(
+        seenKey(workspaceId),
+      )) ?? {}
+    );
+  }
+  if (mode === "file") {
+    return readFileJson<Record<string, string[]>>(seenFile(workspaceId), {});
+  }
+  return memoryBucket(workspaceId).seen ?? {};
+}
+
+async function writeSeen(
+  workspaceId: string,
+  seen: Record<string, string[]>,
+): Promise<void> {
+  const mode = storageMode();
+  if (mode === "redis") {
+    await redisClient()?.set(seenKey(workspaceId), seen);
+    return;
+  }
+  if (mode === "file") {
+    writeFileJson(seenFile(workspaceId), seen);
+    return;
+  }
+  memoryBucket(workspaceId).seen = seen;
 }
 
 function defaultPolicy(): Policy {
@@ -102,34 +179,43 @@ function defaultPolicy(): Policy {
   };
 }
 
-export async function getIncidents(): Promise<Incident[]> {
-  const incidents = await readIncidents();
+export async function getIncidents(workspaceId: string): Promise<Incident[]> {
+  const incidents = await readIncidents(workspaceId);
   return incidents.sort(
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
   );
 }
 
-export async function getIncident(id: string): Promise<Incident | null> {
-  const incidents = await readIncidents();
+export async function getIncident(
+  workspaceId: string,
+  id: string,
+): Promise<Incident | null> {
+  const incidents = await readIncidents(workspaceId);
   return incidents.find((item) => item.id === id || item.externalId === id) ?? null;
 }
 
-export async function saveIncident(incident: Incident): Promise<Incident> {
-  const incidents = await readIncidents();
+export async function saveIncident(
+  workspaceId: string,
+  incident: Incident,
+): Promise<Incident> {
+  const incidents = await readIncidents(workspaceId);
   const index = incidents.findIndex((item) => item.id === incident.id);
   if (index >= 0) incidents[index] = incident;
   else incidents.unshift(incident);
-  await writeIncidents(incidents);
+  await writeIncidents(workspaceId, incidents);
   return incident;
 }
 
-export async function getPolicy(): Promise<Policy> {
-  return readPolicy();
+export async function getPolicy(workspaceId: string): Promise<Policy> {
+  return readPolicy(workspaceId);
 }
 
-export async function savePolicy(content: string): Promise<Policy> {
+export async function savePolicy(
+  workspaceId: string,
+  content: string,
+): Promise<Policy> {
   const policy: Policy = { content, updatedAt: new Date().toISOString() };
-  await writePolicy(policy);
+  await writePolicy(workspaceId, policy);
   return policy;
 }
 
@@ -138,34 +224,18 @@ export async function savePolicy(content: string): Promise<Policy> {
  * (e.g. YouTube comments) and records them so repeated imports never
  * create duplicate incidents.
  */
-export async function dedupeSeen(platform: string, ids: string[]): Promise<string[]> {
+export async function dedupeSeen(
+  workspaceId: string,
+  platform: string,
+  ids: string[],
+): Promise<string[]> {
   if (ids.length === 0) return [];
-  const mode = storageMode();
-  const read = async (): Promise<Record<string, string[]>> => {
-    if (mode === "redis") {
-      return (await redisClient()?.get<Record<string, string[]>>(KV_KEYS.seen)) ?? {};
-    }
-    if (mode === "file") return readFileJson<Record<string, string[]>>("seen.json", {});
-    return globalThis.__CREAGUARD_SEEN__ ?? {};
-  };
-  const write = async (seen: Record<string, string[]>) => {
-    if (mode === "redis") {
-      await redisClient()?.set(KV_KEYS.seen, seen);
-      return;
-    }
-    if (mode === "file") {
-      writeFileJson("seen.json", seen);
-      return;
-    }
-    globalThis.__CREAGUARD_SEEN__ = seen;
-  };
-
-  const seen = await read();
+  const seen = await readSeen(workspaceId);
   const existing = new Set(seen[platform] ?? []);
   const fresh = ids.filter((id) => !existing.has(id));
   if (fresh.length > 0) {
     seen[platform] = [...(seen[platform] ?? []), ...fresh].slice(-1000);
-    await write(seen);
+    await writeSeen(workspaceId, seen);
   }
   return fresh;
 }

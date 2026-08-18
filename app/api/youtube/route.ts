@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { processIncomingMessage } from "@/lib/intake";
 import { dedupeSeen } from "@/lib/store";
+import { currentWorkspaceId } from "@/lib/workspace";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -95,7 +96,8 @@ export async function POST(request: Request) {
   }
 
   // Only process comments we have not seen before.
-  const fresh = await dedupeSeen("youtube", comments.map((c) => c.id));
+  const ws = await currentWorkspaceId();
+  const fresh = await dedupeSeen(ws, "youtube", comments.map((c) => c.id));
 
   // Analysis is the slow part; process as many as fit in a short budget so
   // the request never times out. Re-running the same URL continues where it
@@ -107,7 +109,7 @@ export async function POST(request: Request) {
     if (Date.now() - started > budgetMs) break;
     const comment = comments.find((c) => c.id === id);
     if (!comment) continue;
-    await processIncomingMessage(comment.text, comment.author, "youtube");
+    await processIncomingMessage(ws, comment.text, comment.author, "youtube");
     analyzed += 1;
   }
 

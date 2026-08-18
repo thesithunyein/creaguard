@@ -10,18 +10,28 @@ import {
 import { getIncidents, getPolicy, saveIncident } from "./store";
 import type { Incident, IncidentEvent, IncidentStatus } from "./types";
 
+/** Source-channel pointers captured at intake, used for enforcement later. */
+export interface IntakeMeta {
+  externalAuthorId?: string;
+  sourceGuildId?: string;
+  sourceChannelId?: string;
+  sourceMessageId?: string;
+}
+
 /**
  * Shared intake pipeline for every channel (manual paste, Discord,
  * Telegram): analyze -> risk score -> auto-handling tier -> store ->
  * autonomous Mind relay for high-risk cases.
  */
 export async function processIncomingMessage(
+  workspaceId: string,
   message: string,
   authorId: string,
   platform: string,
+  meta?: IntakeMeta,
 ): Promise<{ incident: Incident; status: IncidentStatus; relatedCount: number }> {
   const classification = await analyzeMessage(message, authorId);
-  const existing = await getIncidents();
+  const existing = await getIncidents(workspaceId);
   const related = existing.filter(
     (item) =>
       authorId && item.events.some((event) => event.authorId === authorId),
@@ -64,18 +74,22 @@ export async function processIncomingMessage(
     createdAt: now,
     updatedAt: now,
     followUpAt: followUpAt || undefined,
+    externalAuthorId: meta?.externalAuthorId,
+    sourceGuildId: meta?.sourceGuildId,
+    sourceChannelId: meta?.sourceChannelId,
+    sourceMessageId: meta?.sourceMessageId,
   };
 
-  await saveIncident(incident);
+  await saveIncident(workspaceId, incident);
 
   // Autonomous follow-up: high-risk messages are relayed to the Mind the
   // moment they arrive — no human click required.
   if (status === "needs_review") {
-    const policy = await getPolicy();
+    const policy = await getPolicy(workspaceId);
     const relay = await sendToMinds(policy, incident);
     if (relay.alias) {
       incident.mindsAlias = relay.alias;
-      await saveIncident(incident);
+      await saveIncident(workspaceId, incident);
     }
   }
 

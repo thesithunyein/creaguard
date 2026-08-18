@@ -1737,6 +1737,22 @@ img {
   background: rgba(255, 255, 255, 0.1);
 }
 
+.cg-btn.danger {
+  background: var(--red-soft);
+  color: var(--red);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+}
+
+.cg-btn.danger:hover {
+  background: rgba(248, 113, 113, 0.22);
+}
+
+.cg-enforce-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
 /* Alert + toast */
 .cg-alert {
   display: flex;

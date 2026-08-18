@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  SignedIn,
+  SignedOut,
+  SignInButton,
+  UserButton,
+  useAuth,
+} from "@clerk/nextjs";
 import type {
   Incident,
   Policy,
@@ -69,7 +76,32 @@ function mindReplyToText(html: string): string {
     .trim();
 }
 
-export function CreaGuardApp() {
+function AuthArea({ onAuthChange }: { onAuthChange: () => void }) {
+  const { isSignedIn } = useAuth();
+  const previous = useRef(isSignedIn);
+  useEffect(() => {
+    if (previous.current !== isSignedIn) {
+      previous.current = isSignedIn;
+      onAuthChange();
+    }
+  }, [isSignedIn, onAuthChange]);
+  return (
+    <>
+      <SignedIn>
+        <UserButton />
+      </SignedIn>
+      <SignedOut>
+        <SignInButton mode="modal">
+          <button className="cg-btn ghost" type="button">
+            Sign in
+          </button>
+        </SignInButton>
+      </SignedOut>
+    </>
+  );
+}
+
+export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
   const [view, setView] = useState<View>("overview");
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [policy, setPolicy] = useState<Policy | null>(null);
@@ -132,6 +164,9 @@ export function CreaGuardApp() {
   // Prefer the reply cached on the incident (instant on revisit and after
   // a status change) over the in-flight polling state.
   const shownMindsReply = mindsReply ?? selected?.mindsReply ?? null;
+  const selectedPlatform = selected?.events.at(-1)?.platform ?? null;
+  const enforceEnabled =
+    selectedPlatform === "discord" || selectedPlatform === "telegram";
 
   useEffect(() => {
     if (!selectedId) {
@@ -253,6 +288,45 @@ export function CreaGuardApp() {
     }
   }
 
+  async function enforceIncident(action: "ban" | "delete") {
+    if (!selected) return;
+    const platform = selected.events.at(-1)?.platform ?? "this platform";
+    const verb =
+      action === "ban"
+        ? "ban this user"
+        : "delete the offending message";
+    if (
+      !window.confirm(
+        `This will ${verb} on ${platform}. It is real and irreversible. Continue?`,
+      )
+    ) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/incidents/${selected.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enforce: action }),
+      });
+      const data = (await res.json()) as {
+        enforcement?: { ok?: boolean; detail?: string };
+        error?: string;
+      };
+      if (!res.ok) throw new Error(data.error ?? "Enforcement failed.");
+      if (!data.enforcement?.ok) {
+        throw new Error(data.enforcement?.detail ?? "Enforcement failed.");
+      }
+      await refresh();
+      setDecisionNote("");
+      setToast({
+        title: "Action taken",
+        copy: `${action} executed on ${platform}. Case resolved and your Mind was taught this decision.`,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Enforcement failed.");
+    }
+  }
+
   async function savePolicyNow() {
     setPolicySaving(true);
     try {
@@ -300,6 +374,14 @@ export function CreaGuardApp() {
             <i />
             {status?.minds ? "Minds connected" : "Minds not configured"}
           </span>
+          {clerkEnabled && (
+            <AuthArea
+              onAuthChange={() => {
+                setSelectedId(null);
+                void refresh();
+              }}
+            />
+          )}
         </div>
       </header>
 
@@ -502,6 +584,30 @@ export function CreaGuardApp() {
                 When you resolve or dismiss with a note, your Mind learns your
                 standard for similar cases — no extra setup needed.
               </p>
+
+              <div className="cg-drawer-section">Enforcement</div>
+              {enforceEnabled ? (
+                <div className="cg-enforce-actions">
+                  <button
+                    className="cg-btn danger"
+                    onClick={() => enforceIncident("ban")}
+                  >
+                    <Icon name="user-x" size={14} /> Ban user
+                  </button>
+                  <button
+                    className="cg-btn ghost"
+                    onClick={() => enforceIncident("delete")}
+                  >
+                    <Icon name="x" size={14} /> Remove message
+                  </button>
+                </div>
+              ) : (
+                <p className="cg-drawer-note-hint">
+                  {selectedPlatform === "youtube"
+                    ? "YouTube has no moderation API — CreaGuard recommends; take the action manually on YouTube."
+                    : "No automated enforcement channel for this case. CreaGuard recommends; you act on the platform."}
+                </p>
+              )}
 
               <div className="cg-drawer-section">Mind review</div>
               <div className={`cg-minds-review ${shownMindsReply ? "reply" : mindsState}`}>

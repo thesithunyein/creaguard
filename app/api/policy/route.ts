@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { getPolicy, savePolicy } from "@/lib/store";
+import { currentWorkspaceId } from "@/lib/workspace";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  return NextResponse.json({ policy: await getPolicy() });
+  return NextResponse.json({ policy: await getPolicy(await currentWorkspaceId()) });
 }
 
 export async function PUT(request: Request) {
@@ -23,7 +24,7 @@ export async function PUT(request: Request) {
         { status: 400 },
       );
     }
-    const policy = await savePolicy(body.content.trim());
+    const policy = await savePolicy(await currentWorkspaceId(), body.content.trim());
     return NextResponse.json({ policy });
   } catch {
     return NextResponse.json(

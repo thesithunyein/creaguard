@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { waitUntil } from "@vercel/functions";
 import { processIncomingMessage } from "@/lib/intake";
 import { saveIncident } from "@/lib/store";
+import { defaultWorkspaceId } from "@/lib/workspace";
 import { CATEGORY_LABELS, verdictFor } from "@/lib/verdict";
 
 export const runtime = "nodejs";
@@ -42,6 +43,7 @@ export async function POST(request: Request) {
 
   let update: {
     message?: {
+      message_id?: number;
       text?: string;
       chat?: { id?: number };
       from?: { id?: number; username?: string; first_name?: string };
@@ -74,10 +76,21 @@ export async function POST(request: Request) {
   waitUntil(
     (async () => {
       try {
+        const ws = defaultWorkspaceId();
         const { incident, status } = await processIncomingMessage(
+          ws,
           text,
           authorId,
           "telegram",
+          {
+            externalAuthorId: message.from?.id
+              ? String(message.from.id)
+              : undefined,
+            sourceChannelId: String(chatId),
+            sourceMessageId: message.message_id
+              ? String(message.message_id)
+              : undefined,
+          },
         );
         const reply = [
           `${CATEGORY_LABELS[incident.category] ?? incident.category} — risk ${incident.riskScore}/100 (severity ${incident.severity}/5)`,
@@ -91,7 +104,7 @@ export async function POST(request: Request) {
           // can post the decision back into this same chat.
           incident.telegramChatId = chatId;
           incident.telegramMessageId = messageId;
-          await saveIncident(incident);
+          await saveIncident(ws, incident);
         }
       } catch {
         await sendTelegramMessage(

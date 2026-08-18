@@ -16,6 +16,8 @@ CreaGuard is a real, API-backed web application built for the **Moderation & Com
 - **Minds relay** — with `MINDS_BUILDER_API_KEY` and `MINDS_MIND_ID`, a case is relayed to your Mind through the official `@animocabrands/minds-client-lib`. The relay is non-blocking: the case is sent immediately, the conversation alias is stored on the incident, and the Mind's reply is read back from conversation history into a live **Mind review** panel in the case drawer. This proves cross-session memory and continuity: the Mind sees every prior case in the same conversation.
 - **Decision feedback loop** — when you resolve or dismiss a case with a decision note, the note is sent back to your Mind as the creator's standard for similar cases. The Mind needs less human input over time.
 - **Multi-channel intake** — every channel funnels into one shared pipeline (`lib/intake.ts`): manual paste, Discord `/review`, Telegram bot messages, and YouTube comments imported from a video link. Platform differences are intake only — analysis, risk, quarantine, and the Mind are identical everywhere.
+- **Private per-creator workspaces** — with Clerk configured, each signed-in creator gets their own isolated incidents and policy. Without Clerk the app runs as a single demo workspace (`WORKSPACE_ID`).
+- **Human-confirmed enforcement** — Discord and Telegram cases can ban a user or remove the message on an explicit confirm-click (never automatic). YouTube has no moderation API, so it honestly recommends a manual action instead.
 
 ## Stack
 
@@ -45,6 +47,8 @@ Without any environment variables, the app runs with a local file store and manu
 | `FEATHERLESS_API_KEY` | Real message classification |
 | `FEATHERLESS_MODEL` | Optional model override (default `Qwen/Qwen2.5-7B-Instruct`) |
 | `MINDS_BUILDER_API_KEY` / `MINDS_MIND_ID` | Relay cases to a Minds agent |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` | Optional Clerk auth (private per-creator workspaces) |
+| `WORKSPACE_ID` | Workspace webhooks write into when no one is signed in (default `demo`) |
 | `CRON_SECRET` | Bearer secret for the follow-up endpoint |
 | `DISCORD_BOT_TOKEN` / `DISCORD_APPLICATION_ID` / `DISCORD_PUBLIC_KEY` | Discord `/review` slash command |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_BOT_SECRET` | Telegram bot webhook (run `scripts/setup-telegram.mjs`) |
@@ -109,6 +113,12 @@ YouTube imports are deduplicated by comment id, so re-importing a video never cr
 - **Featherless** — bounded message-level classification and summarization.
 - **Minds** — persistent agent relay for cross-session creator context.
 - **Deterministic gates** — bans, reports, and evidence deletion are always blocked from automation.
+
+## Workspaces & enforcement
+
+All storage is scoped by `workspaceId` (Redis keys, file names, and the in-memory fallback alike). The browser app resolves the signed-in Clerk user's id as their workspace; webhooks (`/api/telegram`, `/api/discord`, `/api/youtube`) use the env-mapped `WORKSPACE_ID` because they carry no browser session. Without Clerk keys the whole app falls back to the single `demo` workspace, so the demo never breaks while auth is optional.
+
+Enforcement is deliberately a human-confirmed action. Cases capture the offender's platform id plus guild/channel/message pointers at intake, and the dashboard's **Ban user** / **Remove message** buttons call Discord (`BAN_MEMBERS`) or Telegram (`banChatMember` / `deleteMessage`) only after an explicit confirm. YouTube is framed honestly: the Data API has no moderation endpoints, so the UI tells the creator to act manually.
 
 ## Safety boundaries
 

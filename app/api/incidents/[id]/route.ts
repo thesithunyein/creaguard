@@ -6,6 +6,8 @@ import {
   sendToMinds,
 } from "@/lib/minds";
 import { postDecisionToTelegram } from "@/lib/channels";
+import { enforceAction, type EnforceAction } from "@/lib/enforce";
+import { currentWorkspaceId } from "@/lib/workspace";
 import type { IncidentStatus } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -24,7 +26,8 @@ export async function GET(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
-  const incident = await getIncident(id);
+  const ws = await currentWorkspaceId();
+  const incident = await getIncident(ws, id);
   if (!incident) {
     return NextResponse.json({ error: "Incident not found." }, { status: 404 });
   }
@@ -38,7 +41,7 @@ export async function GET(
       minds = await fetchMindsReply(incident);
       if (minds.reply) {
         incident.mindsReply = minds.reply;
-        await saveIncident(incident);
+        await saveIncident(ws, incident);
       }
     }
   }
@@ -51,7 +54,8 @@ export async function PATCH(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
-  const incident = await getIncident(id);
+  const ws = await currentWorkspaceId();
+  const incident = await getIncident(ws, id);
   if (!incident) {
     return NextResponse.json({ error: "Incident not found." }, { status: 404 });
   }
@@ -62,12 +66,30 @@ export async function PATCH(
       decisionNote?: unknown;
       relayToMinds?: unknown;
       teachMind?: unknown;
+      enforce?: unknown;
     };
-    const status = ALLOWED_STATUSES.includes(body.status as IncidentStatus)
+    let status = ALLOWED_STATUSES.includes(body.status as IncidentStatus)
       ? (body.status as IncidentStatus)
       : incident.status;
     const decisionNote =
       typeof body.decisionNote === "string" ? body.decisionNote.trim() : "";
+    const enforce: EnforceAction | null =
+      body.enforce === "ban" ||
+      body.enforce === "timeout" ||
+      body.enforce === "delete"
+        ? body.enforce
+        : null;
+
+    // Human-confirmed enforcement: perform the platform action first, then
+    // resolve the case. The confirmation happens in the UI, never here.
+    let enforcement = null;
+    if (enforce) {
+      enforcement = await enforceAction(incident, enforce);
+      if (enforcement.ok) {
+        status = "resolved";
+        if (!decisionNote) incident.decisionNote = `Enforced: ${enforce}`;
+      }
+    }
 
     incident.status = status;
     incident.updatedAt = new Date().toISOString();
@@ -76,33 +98,34 @@ export async function PATCH(
       delete incident.followUpAt;
     }
 
-    await saveIncident(incident);
+    await saveIncident(ws, incident);
 
     let minds = null;
     const terminalDecision =
       status === "resolved" || status === "dismissed";
+    const effectiveNote = decisionNote || incident.decisionNote || "";
     if (body.relayToMinds === true) {
       // Relay the case to the Mind for review.
-      const policy = await getPolicy();
+      const policy = await getPolicy(ws);
       minds = await sendToMinds(policy, incident);
       if (minds.alias) {
         incident.mindsAlias = minds.alias;
-        await saveIncident(incident);
+        await saveIncident(ws, incident);
       }
-    } else if (decisionNote && terminalDecision && body.teachMind !== false) {
+    } else if (effectiveNote && terminalDecision && body.teachMind !== false) {
       // Feedback loop: the creator's terminal decision is sent back to
       // the Mind so it learns their standards for similar cases.
-      const policy = await getPolicy();
-      minds = await sendDecisionToMinds(policy, incident, decisionNote);
+      const policy = await getPolicy(ws);
+      minds = await sendDecisionToMinds(policy, incident, effectiveNote);
     }
 
     // Post the decision back to the source channel so the loop is visible
     // there too (Telegram today; Discord/YouTube are one-way intakes).
     const channelPostedBack = terminalDecision
-      ? await postDecisionToTelegram(incident, status, decisionNote)
+      ? await postDecisionToTelegram(incident, status, effectiveNote)
       : false;
 
-    return NextResponse.json({ incident, minds, channelPostedBack });
+    return NextResponse.json({ incident, minds, channelPostedBack, enforcement });
   } catch {
     return NextResponse.json(
       { error: "Invalid request body." },

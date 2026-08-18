@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createPublicKey, verify } from "node:crypto";
 import { waitUntil } from "@vercel/functions";
-import { processIncomingMessage } from "@/lib/intake";
+import { processIncomingMessage, type IntakeMeta } from "@/lib/intake";
+import { defaultWorkspaceId } from "@/lib/workspace";
 import { CATEGORY_LABELS, verdictFor } from "@/lib/verdict";
 
 export const runtime = "nodejs";
@@ -34,11 +35,21 @@ function verifyDiscordSignature(
   }
 }
 
-async function reviewAndCreate(message: string, authorId: string) {
+async function reviewAndCreate(
+  message: string,
+  authorId: string,
+  meta: IntakeMeta,
+) {
   // Same intake pipeline as every other channel (manual paste, Telegram,
   // webhooks): analyze -> risk score -> auto-handling tier -> store ->
   // autonomous Mind relay for high-risk cases.
-  return processIncomingMessage(message, authorId, "discord");
+  return processIncomingMessage(
+    defaultWorkspaceId(),
+    message,
+    authorId,
+    "discord",
+    meta,
+  );
 }
 
 async function patchInteraction(interactionToken: string, content: string) {
@@ -70,12 +81,14 @@ export async function POST(request: Request) {
   let interaction: {
     type: number;
     token?: string;
+    guild_id?: string;
+    channel_id?: string;
     data?: {
       name?: string;
       options?: { name: string; value?: unknown }[];
     };
-    member?: { user?: { username?: string } };
-    user?: { username?: string };
+    member?: { user?: { id?: string; username?: string } };
+    user?: { id?: string; username?: string };
   };
   try {
     interaction = JSON.parse(rawBody);
@@ -103,6 +116,14 @@ export async function POST(request: Request) {
     const authorId =
       interaction.member?.user?.username ?? interaction.user?.username ?? "";
     const interactionToken = interaction.token ?? "";
+    // Offender identity + guild/channel pointers, for human-confirmed
+    // enforcement (ban / timeout) later.
+    const meta: IntakeMeta = {
+      externalAuthorId:
+        interaction.member?.user?.id ?? interaction.user?.id,
+      sourceGuildId: interaction.guild_id,
+      sourceChannelId: interaction.channel_id,
+    };
 
     if (!message) {
       return NextResponse.json({
@@ -116,7 +137,11 @@ export async function POST(request: Request) {
     waitUntil(
       (async () => {
         try {
-          const { incident, status } = await reviewAndCreate(message, authorId);
+          const { incident, status } = await reviewAndCreate(
+            message,
+            authorId,
+            meta,
+          );
           const label = CATEGORY_LABELS[incident.category] ?? incident.category;
           const content = [
             `${label} — risk ${incident.riskScore}/100 (severity ${incident.severity}/5)`,

@@ -53,6 +53,11 @@ export interface Incident {
   /** Where the Telegram bot posted its verdict, so decisions can post back. */
   telegramChatId?: number;
   telegramMessageId?: number;
+  /** Offender identity + source pointers captured at intake, for human-confirmed enforcement. */
+  externalAuthorId?: string;
+  sourceGuildId?: string;
+  sourceChannelId?: string;
+  sourceMessageId?: string;
 }
 
 export interface Policy {

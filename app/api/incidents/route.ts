@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { processIncomingMessage } from "@/lib/intake";
+import { getIncidents } from "@/lib/store";
+import { currentWorkspaceId } from "@/lib/workspace";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const { getIncidents } = await import("@/lib/store");
-  const incidents = await getIncidents();
+  const incidents = await getIncidents(await currentWorkspaceId());
   return NextResponse.json({ incidents });
 }
 
@@ -39,6 +40,7 @@ export async function POST(request: Request) {
     }
 
     const { incident, status, relatedCount } = await processIncomingMessage(
+      await currentWorkspaceId(),
       message,
       authorId,
       platform,

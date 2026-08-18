@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { followUpToMinds } from "@/lib/minds";
 import { getIncidents, getPolicy, saveIncident } from "@/lib/store";
+import { currentWorkspaceId } from "@/lib/workspace";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,7 +16,8 @@ export async function POST(request: Request) {
   }
 
   const now = new Date();
-  const incidents = await getIncidents();
+  const ws = await currentWorkspaceId();
+  const incidents = await getIncidents(ws);
   const due = incidents.filter(
     (incident) =>
       incident.followUpAt &&
@@ -27,7 +29,7 @@ export async function POST(request: Request) {
       incident.status !== "quarantined",
   );
 
-  const policy = await getPolicy();
+  const policy = await getPolicy(ws);
   const processed = [];
   for (const incident of due) {
     // Autonomous follow-up: the Mind re-reviews the open case and recommends
@@ -38,7 +40,7 @@ export async function POST(request: Request) {
     incident.updatedAt = now.toISOString();
     delete incident.followUpAt;
     if (result.alias) incident.mindsAlias = result.alias;
-    await saveIncident(incident);
+    await saveIncident(ws, incident);
 
     processed.push({
       id: incident.id,
