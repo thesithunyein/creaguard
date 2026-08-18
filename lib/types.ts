@@ -50,6 +50,9 @@ export interface Incident {
   mindsAlias?: string;
   /** Cached Mind reply so the dashboard loads it instantly on revisit. */
   mindsReply?: string;
+  /** Where the Telegram bot posted its verdict, so decisions can post back. */
+  telegramChatId?: number;
+  telegramMessageId?: number;
 }
 
 export interface Policy {

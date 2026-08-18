@@ -5,6 +5,7 @@ import {
   sendDecisionToMinds,
   sendToMinds,
 } from "@/lib/minds";
+import { postDecisionToTelegram } from "@/lib/channels";
 import type { IncidentStatus } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -95,7 +96,13 @@ export async function PATCH(
       minds = await sendDecisionToMinds(policy, incident, decisionNote);
     }
 
-    return NextResponse.json({ incident, minds });
+    // Post the decision back to the source channel so the loop is visible
+    // there too (Telegram today; Discord/YouTube are one-way intakes).
+    const channelPostedBack = terminalDecision
+      ? await postDecisionToTelegram(incident, status, decisionNote)
+      : false;
+
+    return NextResponse.json({ incident, minds, channelPostedBack });
   } catch {
     return NextResponse.json(
       { error: "Invalid request body." },

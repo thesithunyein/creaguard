@@ -128,6 +128,10 @@ export function CreaGuardApp() {
     [incidents, selectedId],
   );
 
+  // Prefer the reply cached on the incident (instant on revisit and after
+  // a status change) over the in-flight polling state.
+  const shownMindsReply = mindsReply ?? selected?.mindsReply ?? null;
+
   useEffect(() => {
     if (!selectedId) {
       setMindsReply(null);
@@ -229,8 +233,6 @@ export function CreaGuardApp() {
         throw new Error(data.error ?? "Failed to update case.");
       }
       await refresh();
-      setMindsReply(null);
-      setMindsState("pending");
       setDecisionNote("");
       const taught = note && (nextStatus === "resolved" || nextStatus === "dismissed");
       setToast({
@@ -493,8 +495,16 @@ export function CreaGuardApp() {
               </p>
 
               <div className="cg-drawer-section">Mind review</div>
-              <div className={`cg-minds-review ${mindsState}`}>
-                {mindsState === "pending" && (
+              <div className={`cg-minds-review ${shownMindsReply ? "reply" : mindsState}`}>
+                {shownMindsReply ? (
+                  <>
+                    <span className="cg-minds-avatar"><Icon name="sparkles" size={14} /></span>
+                    <div>
+                      <strong>Your Mind replied</strong>
+                      <p className="cg-minds-reply-text">{mindReplyToText(shownMindsReply)}</p>
+                    </div>
+                  </>
+                ) : mindsState === "pending" ? (
                   <>
                     <span className="cg-minds-spinner" />
                     <div>
@@ -502,17 +512,7 @@ export function CreaGuardApp() {
                       <p>The Mind is reading the case against your policy.</p>
                     </div>
                   </>
-                )}
-                {mindsState === "reply" && mindsReply && (
-                  <>
-                    <span className="cg-minds-avatar"><Icon name="sparkles" size={14} /></span>
-                    <div>
-                      <strong>Your Mind replied</strong>
-                      <p className="cg-minds-reply-text">{mindReplyToText(mindsReply)}</p>
-                    </div>
-                  </>
-                )}
-                {mindsState === "error" && (
+                ) : mindsState === "error" ? (
                   <>
                     <span><Icon name="alert-triangle" size={14} /></span>
                     <div>
@@ -520,8 +520,7 @@ export function CreaGuardApp() {
                       <p>The case was relayed, but the reply could not be read. Check the Minds conversation for {selected.externalId}.</p>
                     </div>
                   </>
-                )}
-                {mindsState === "idle" && !selected.mindsAlias && (
+                ) : !selected.mindsAlias ? (
                   <>
                     <span><Icon name="send" size={14} /></span>
                     <div>
@@ -529,7 +528,7 @@ export function CreaGuardApp() {
                       <p>Use “Relay to Minds” to send this case to your Mind for review.</p>
                     </div>
                   </>
-                )}
+                ) : null}
               </div>
             </div>
             <div className="cg-drawer-actions">

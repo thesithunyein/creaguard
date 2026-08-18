@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { waitUntil } from "@vercel/functions";
 import { processIncomingMessage } from "@/lib/intake";
+import { saveIncident } from "@/lib/store";
 import { CATEGORY_LABELS, verdictFor } from "@/lib/verdict";
 
 export const runtime = "nodejs";
@@ -18,14 +19,17 @@ const GUIDE = [
   "Every case lands in your dashboard, where you decide.",
 ].join("\n");
 
-async function sendTelegramMessage(chatId: number, text: string) {
+async function sendTelegramMessage(chatId: number, text: string): Promise<number | null> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
-  if (!token) return;
-  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+  if (!token) return null;
+  const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ chat_id: chatId, text }),
   });
+  if (!res.ok) return null;
+  const json = (await res.json()) as { result?: { message_id?: number } };
+  return json.result?.message_id ?? null;
 }
 
 export async function POST(request: Request) {
@@ -81,7 +85,14 @@ export async function POST(request: Request) {
           verdictFor(status),
           `Case ${incident.externalId} — open the dashboard to review.`,
         ].join("\n");
-        await sendTelegramMessage(chatId, reply);
+        const messageId = await sendTelegramMessage(chatId, reply);
+        if (messageId) {
+          // Remember where the verdict was posted so a later Resolve/Dismiss
+          // can post the decision back into this same chat.
+          incident.telegramChatId = chatId;
+          incident.telegramMessageId = messageId;
+          await saveIncident(incident);
+        }
       } catch {
         await sendTelegramMessage(
           chatId,
