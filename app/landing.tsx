@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
+import { useAuth, useClerk, UserButton } from "@clerk/nextjs";
 import { BrandIcon, Icon } from "./icons";
 
 const FULL_TEXT = "Creator Safety That Remembers Context -- Not Just Rules.";
@@ -208,7 +209,35 @@ function Circles() {
   );
 }
 
-export function LandingPage() {
+function HeaderAuth() {
+  const { isLoaded, isSignedIn } = useAuth();
+  const { openSignIn } = useClerk();
+  if (!isLoaded) return <div className="ln-header-right" />;
+  return (
+    <div className="ln-header-right">
+      {isSignedIn ? (
+        <>
+          <Link href="/app" className="ln-nav-link">
+            Dashboard
+          </Link>
+          <UserButton />
+        </>
+      ) : (
+        <span className="ln-btn-border-wrap">
+          <button
+            type="button"
+            className="ln-btn ln-btn-fill-right"
+            onClick={() => openSignIn()}
+          >
+            <span className="ln-btn-content">Sign in</span>
+          </button>
+        </span>
+      )}
+    </div>
+  );
+}
+
+export function LandingPage({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
   return (
     <div className="ln-app">
       <div className="ln-glow ln-glow-a" />
@@ -224,6 +253,7 @@ export function LandingPage() {
             <a href="#platforms" className="ln-nav-link">Platforms</a>
           </nav>
         </div>
+        {clerkEnabled && <HeaderAuth />}
       </header>
 
       <main className="ln-hero" id="product">
