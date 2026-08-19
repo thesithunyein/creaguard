@@ -591,9 +591,13 @@ img {
 }
 
 .cg-logo-img {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   object-fit: contain;
+  border-radius: 9px;
+  background: linear-gradient(160deg, rgba(76, 209, 55, 0.16), rgba(76, 209, 55, 0.04));
+  border: 1px solid rgba(76, 209, 55, 0.35);
+  box-shadow: 0 0 0 3px rgba(76, 209, 55, 0.07), 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 
 .cg-brand {

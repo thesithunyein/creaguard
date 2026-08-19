@@ -48,7 +48,7 @@ const categoryIcon: Record<RiskCategory, string> = {
   scam: "dollar-sign",
   harassment: "flag",
   criticism: "message-square",
-  other: "circle",
+  other: "message-circle",
 };
 
 function relativeTime(value: string): string {

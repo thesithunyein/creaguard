@@ -93,7 +93,8 @@ const PATHS: Record<string, ReactNode> = {
   ),
   "flag": (
     <>
-      <path d="M4 22V4a8 8 0 0 1 8-4h4l-3 4 3 4h-4a4 4 0 0 1-4-4" />
+      <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+      <path d="M4 22v-7" />
     </>
   ),
   "dollar-sign": (
