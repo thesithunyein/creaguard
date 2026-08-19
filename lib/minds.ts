@@ -5,7 +5,11 @@ export interface MindsResult {
   alias?: string;
   message?: string;
   error?: string;
+  reply?: string;
 }
+
+/** How long to wait for the Mind to reply inside a serverless function. */
+const REPLY_TIMEOUT_MS = 55_000;
 
 export interface MindsReplyResult {
   connected: boolean;
@@ -110,7 +114,26 @@ export async function followUpToMinds(
 
     await client.sendMessage({ alias, messageText: message });
 
-    return { connected: true, alias, message: "Follow-up sent to your Mind." };
+    // Wait for the Mind's recommendation so the dashboard can show a
+    // concrete "Approve & execute" action, not just free text.
+    const outcome = await client.waitForReply({
+      alias,
+      timeoutMs: REPLY_TIMEOUT_MS,
+      sentMessageText: message,
+    });
+    const reply =
+      !outcome.timedOut && outcome.reply.messageText?.trim()
+        ? outcome.reply.messageText.trim()
+        : undefined;
+
+    return {
+      connected: true,
+      alias,
+      reply,
+      message: reply
+        ? "Follow-up answered by your Mind."
+        : "Follow-up sent — the Mind did not reply in time.",
+    };
   } catch (error) {
     return {
       connected: true,
@@ -246,14 +269,19 @@ export async function proposePolicyUpdate(
 
     await client.sendMessage({ alias, messageText: message });
 
-    // Minds replies arrive asynchronously, so poll briefly for the
-    // proposal instead of reading once and giving up.
-    for (let attempt = 0; attempt < 12; attempt += 1) {
-      const reply = await fetchMindsReplyForAlias(alias);
-      if (reply.reply) return reply;
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+    // Wait for the Mind's proposal (streaming + history fallback).
+    const outcome = await client.waitForReply({
+      alias,
+      timeoutMs: REPLY_TIMEOUT_MS,
+      sentMessageText: message,
+    });
+    if (outcome.timedOut || !outcome.reply.messageText?.trim()) {
+      return {
+        connected: true,
+        error: "Your Mind did not reply in time — try again shortly.",
+      };
     }
-    return fetchMindsReplyForAlias(alias);
+    return { connected: true, reply: outcome.reply.messageText.trim() };
   } catch (error) {
     return {
       connected: true,

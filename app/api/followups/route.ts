@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
-import {
-  fetchMindsReply,
-  followUpToMinds,
-} from "@/lib/minds";
+import { followUpToMinds } from "@/lib/minds";
 import { getIncidents, getPolicy, saveIncident } from "@/lib/store";
 import { currentWorkspaceId } from "@/lib/workspace";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function POST(request: Request) {
   const secret = process.env.CRON_SECRET;
@@ -43,16 +41,12 @@ export async function POST(request: Request) {
     incident.updatedAt = now.toISOString();
     delete incident.followUpAt;
     if (result.alias) incident.mindsAlias = result.alias;
-    await saveIncident(ws, incident);
 
     // Capture the Mind's recommendation as a concrete proposed action so
     // the dashboard can offer a one-click "Approve & execute".
-    if (incident.mindsAlias) {
-      const reply = await fetchMindsReply(incident);
-      if (reply.reply) {
-        incident.proposedAction = reply.reply;
-        incident.proposedActionAt = now.toISOString();
-      }
+    if (result.reply) {
+      incident.proposedAction = result.reply;
+      incident.proposedActionAt = now.toISOString();
     }
     await saveIncident(ws, incident);
 
