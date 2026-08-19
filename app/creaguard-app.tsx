@@ -119,6 +119,7 @@ export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean 
   const [toast, setToast] = useState<{ title: string; copy: string } | null>(null);
   const [mindsReply, setMindsReply] = useState<string | null>(null);
   const [mindsState, setMindsState] = useState<"idle" | "pending" | "reply" | "error">("idle");
+  const busyRef = useRef(false);
   const [mindsReload, setMindsReload] = useState(0);
   const [decisionNote, setDecisionNote] = useState("");
   const [proposals, setProposals] = useState<PolicyProposal[]>([]);
@@ -296,6 +297,9 @@ export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean 
 
   async function updateIncident(nextStatus: string, relayToMinds = false, note = "") {
     if (!selected) return;
+    // Guard against double-clicks: one in-flight decision per case.
+    if (busyRef.current) return;
+    busyRef.current = true;
     try {
       const res = await fetch(`/api/incidents/${selected.id}`, {
         method: "PATCH",
@@ -321,6 +325,8 @@ export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean 
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update case.");
+    } finally {
+      busyRef.current = false;
     }
   }
 
@@ -339,6 +345,9 @@ export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean 
 
   async function enforceIncident(action: "ban" | "timeout" | "delete") {
     if (!selected) return;
+    // Guard against double-clicks: one in-flight enforcement per case.
+    if (busyRef.current) return;
+    busyRef.current = true;
     const platform = selected.events.at(-1)?.platform ?? "this platform";
     const verb =
       action === "ban"
@@ -375,6 +384,8 @@ export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean 
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Enforcement failed.");
+    } finally {
+      busyRef.current = false;
     }
   }
 
