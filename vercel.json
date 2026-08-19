@@ -11,7 +11,7 @@
     },
     {
       "path": "/api/youtube/watch",
-      "schedule": "0 */3 * * *"
+      "schedule": "30 10 * * *"
     }
   ]
 }

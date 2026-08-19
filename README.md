@@ -63,7 +63,7 @@ overworked creator.
 | **Decision feedback loop** | Resolve or dismiss with a note and the Mind learns your standard for similar cases. Less human input over time. |
 | **Policy evolution** | The Mind proposes policy updates from your decisions; you approve or reject. It never edits policy on its own. |
 | **Morning digest** | A daily Telegram summary: new cases, repeat offenders, and what's waiting on you. |
-| **Auto-watch (YouTube)** | Toggle **Keep watching** on any video and a scheduled cron re-checks it for new comments — the agent monitors the channel without anyone pasting a URL again. |
+| **Auto-watch (YouTube)** | Toggle **Keep watching** on any video and a daily cron re-checks it for new comments — the agent monitors the channel without anyone pasting a URL again. |
 | **Private workspaces** | Sign in (Clerk) and each creator gets an isolated workspace. |
 | **Guided onboarding** | After sign-in, a wizard opens the real channel app for you; the moment you message your bot, CreaGuard detects the connection live. Dashboard shows nothing until a channel is connected — by design. |
 
@@ -200,8 +200,8 @@ node scripts/setup-telegram.mjs
 #    Moderate Members, Manage Messages)
 
 # YouTube: paste a video URL on the Incidents page (YOUTUBE_API_KEY only).
-#   Tick "Keep watching" and the cron (every 3h) keeps importing new
-#   comments on its own — no URL needed again.
+#   Tick "Keep watching" and a daily cron keeps importing new comments
+#   on its own — no URL needed again.
 ```
 
 ## Environment variables
@@ -235,7 +235,7 @@ node scripts/setup-telegram.mjs
 | `POST` | `/api/discord/interactions` | Discord `/review` (Ed25519 signature-verified) |
 | `POST` | `/api/youtube` | Import + analyze a video's comments; `watch: true` starts auto-watching it |
 | `GET` | `/api/youtube` | Watched videos list |
-| `POST` | `/api/youtube/watch` | Autonomous re-check of watched videos (`CRON_SECRET`, every 3h) |
+| `POST` | `/api/youtube/watch` | Autonomous daily re-check of watched videos (`CRON_SECRET`) |
 | `POST` | `/api/followups` | Scheduled autonomous follow-up (`CRON_SECRET`) |
 | `POST` | `/api/digest` | Morning digest to Telegram (`CRON_SECRET`) |
 
