@@ -21,6 +21,7 @@ CreaGuard is a real, API-backed web application built for the **Moderation & Com
 - **Decision feedback loop** — when you resolve or dismiss a case with a decision note, the note is sent back to your Mind as the creator's standard for similar cases. The Mind needs less human input over time.
 - **Multi-channel intake** — every channel funnels into one shared pipeline (`lib/intake.ts`): manual paste, Discord `/review`, Telegram bot messages, and YouTube comments imported from a video link. Platform differences are intake only — analysis, risk, quarantine, and the Mind are identical everywhere.
 - **Private per-creator workspaces** — with Clerk configured, each signed-in creator gets their own isolated incidents and policy. Without Clerk the app runs as a single demo workspace (`WORKSPACE_ID`).
+- **Connect-channels onboarding** — after sign-in, new creators see a guided wizard for Telegram, Discord, and YouTube (max 3). Channels auto-detect as connected the moment they deliver a case, and the dashboard shows only incidents from connected channels — easy setup, no noise.
 - **Human-confirmed enforcement** — Discord and Telegram cases can ban a user or remove the message on an explicit confirm-click (never automatic). YouTube has no moderation API, so it honestly recommends a manual action instead.
 
 ## Stack

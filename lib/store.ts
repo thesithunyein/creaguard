@@ -2,6 +2,7 @@ import { Redis } from "@upstash/redis";
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import type {
+  Connections,
   Incident,
   Policy,
   PolicyProposal,
@@ -61,6 +62,9 @@ function suspectsKey(workspaceId: string): string {
 function proposalsKey(workspaceId: string): string {
   return `creaguard:proposals:${workspaceId}`;
 }
+function connectionsKey(workspaceId: string): string {
+  return `creaguard:connections:${workspaceId}`;
+}
 function incidentsFile(workspaceId: string): string {
   return `incidents-${safeId(workspaceId)}.json`;
 }
@@ -76,6 +80,9 @@ function suspectsFile(workspaceId: string): string {
 function proposalsFile(workspaceId: string): string {
   return `proposals-${safeId(workspaceId)}.json`;
 }
+function connectionsFile(workspaceId: string): string {
+  return `connections-${safeId(workspaceId)}.json`;
+}
 
 interface MemoryBucket {
   incidents?: Incident[];
@@ -83,6 +90,7 @@ interface MemoryBucket {
   seen?: Record<string, string[]>;
   suspects?: Suspect[];
   proposals?: PolicyProposal[];
+  connections?: Connections;
 }
 
 function memoryBucket(workspaceId: string): MemoryBucket {
@@ -404,6 +412,55 @@ export async function saveProposal(
   return proposal;
 }
 
+async function readConnections(workspaceId: string): Promise<Connections> {
+  const mode = storageMode();
+  if (mode === "redis") {
+    return (
+      (await redisClient()?.get<Connections>(connectionsKey(workspaceId))) ??
+      defaultConnections()
+    );
+  }
+  if (mode === "file") {
+    return (
+      readFileJson<Connections | null>(connectionsFile(workspaceId), null) ??
+      defaultConnections()
+    );
+  }
+  return memoryBucket(workspaceId).connections ?? defaultConnections();
+}
+
+async function writeConnections(
+  workspaceId: string,
+  connections: Connections,
+): Promise<void> {
+  const mode = storageMode();
+  if (mode === "redis") {
+    await redisClient()?.set(connectionsKey(workspaceId), connections);
+    return;
+  }
+  if (mode === "file") {
+    writeFileJson(connectionsFile(workspaceId), connections);
+    return;
+  }
+  memoryBucket(workspaceId).connections = connections;
+}
+
+function defaultConnections(): Connections {
+  return { platforms: [], onboardingDone: false };
+}
+
+export async function getConnections(workspaceId: string): Promise<Connections> {
+  return readConnections(workspaceId);
+}
+
+export async function saveConnections(
+  workspaceId: string,
+  connections: Connections,
+): Promise<Connections> {
+  await writeConnections(workspaceId, connections);
+  return connections;
+}
+
 export async function systemStatus(): Promise<SystemStatus> {
   return {
     storage: storageMode(),
@@ -414,6 +471,11 @@ export async function systemStatus(): Promise<SystemStatus> {
         process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_BOT_SECRET,
       ),
       youtube: Boolean(process.env.YOUTUBE_API_KEY),
+      discord: Boolean(
+        process.env.DISCORD_BOT_TOKEN &&
+          process.env.DISCORD_APPLICATION_ID &&
+          process.env.DISCORD_PUBLIC_KEY,
+      ),
     },
   };
 }

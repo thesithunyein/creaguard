@@ -1,4 +1,10 @@
-import type { Incident, Policy, PolicyProposal, Suspect } from "./types";
+import type {
+  Connections,
+  Incident,
+  Policy,
+  PolicyProposal,
+  Suspect,
+} from "./types";
 
 interface CreaGuardMemoryBucket {
   incidents?: Incident[];
@@ -6,6 +12,7 @@ interface CreaGuardMemoryBucket {
   seen?: Record<string, string[]>;
   suspects?: Suspect[];
   proposals?: PolicyProposal[];
+  connections?: Connections;
 }
 
 declare global {

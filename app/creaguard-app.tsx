@@ -7,6 +7,8 @@ import {
   useAuth,
 } from "@clerk/nextjs";
 import type {
+  ChannelName,
+  Connections,
   Incident,
   Policy,
   PolicyProposal,
@@ -120,17 +122,23 @@ export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean 
   const [decisionNote, setDecisionNote] = useState("");
   const [proposals, setProposals] = useState<PolicyProposal[]>([]);
   const [proposalBusy, setProposalBusy] = useState(false);
+  const [connections, setConnections] = useState<Connections>({
+    platforms: [],
+    onboardingDone: false,
+  });
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [incidentsRes, policyRes, statusRes, proposalsRes] = await Promise.all([
-        fetch("/api/incidents", { cache: "no-store" }),
-        fetch("/api/policy", { cache: "no-store" }),
-        fetch("/api/health", { cache: "no-store" }),
-        fetch("/api/policy/proposals", { cache: "no-store" }),
-      ]);
+      const [incidentsRes, policyRes, statusRes, proposalsRes, connRes] =
+        await Promise.all([
+          fetch("/api/incidents", { cache: "no-store" }),
+          fetch("/api/policy", { cache: "no-store" }),
+          fetch("/api/health", { cache: "no-store" }),
+          fetch("/api/policy/proposals", { cache: "no-store" }),
+          fetch("/api/connections", { cache: "no-store" }),
+        ]);
       if (!incidentsRes.ok || !policyRes.ok || !statusRes.ok) {
         throw new Error("Failed to load workspace data.");
       }
@@ -140,11 +148,15 @@ export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean 
       const proposalsData = proposalsRes.ok
         ? ((await proposalsRes.json()) as { proposals: PolicyProposal[] })
         : { proposals: [] as PolicyProposal[] };
+      const connData = connRes.ok
+        ? ((await connRes.json()) as { connections: Connections })
+        : null;
       setIncidents(incidentsData.incidents);
       setPolicy(policyData.policy);
       setPolicyDraft(policyData.policy.content);
       setStatus(statusData.status);
       setProposals(proposalsData.proposals);
+      if (connData) setConnections(connData.connections);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load workspace data.");
     } finally {
@@ -228,10 +240,25 @@ export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean 
     };
   }, [selectedId, mindsReload]);
 
-  const needsReview = incidents.filter((item) => item.status === "needs_review").length;
-  const monitoring = incidents.filter((item) => item.status === "monitoring").length;
-  const quarantined = incidents.filter((item) => item.status === "quarantined").length;
-  const resolved = incidents.filter((item) => item.status === "resolved").length;
+  // Show only incidents from connected channels (plus manual cases). With
+  // zero channels connected there is nothing to filter by, so show all.
+  const visibleIncidents = useMemo(() => {
+    if (connections.platforms.length === 0) return incidents;
+    const connected = new Set<ChannelName>(connections.platforms);
+    return incidents.filter((item) => {
+      const platform = item.events.at(-1)?.platform;
+      return (
+        !platform ||
+        platform === "manual" ||
+        connected.has(platform as ChannelName)
+      );
+    });
+  }, [incidents, connections.platforms]);
+
+  const needsReview = visibleIncidents.filter((item) => item.status === "needs_review").length;
+  const monitoring = visibleIncidents.filter((item) => item.status === "monitoring").length;
+  const quarantined = visibleIncidents.filter((item) => item.status === "quarantined").length;
+  const resolved = visibleIncidents.filter((item) => item.status === "resolved").length;
 
   async function submitIncident() {
     if (!composer.message.trim()) return;
@@ -296,8 +323,8 @@ export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean 
 
   const suspectIncidents = useMemo(() => {
     if (!selected?.suspectId) return [];
-    return incidents.filter((item) => item.suspectId === selected.suspectId);
-  }, [incidents, selected]);
+    return visibleIncidents.filter((item) => item.suspectId === selected.suspectId);
+  }, [visibleIncidents, selected]);
   const suspectPlatforms = useMemo(() => {
     const set = new Set<string>();
     for (const item of suspectIncidents) {
@@ -481,28 +508,63 @@ export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean 
           </div>
         )}
 
-        {view === "overview" && (
-          <Overview
-            incidents={incidents}
-            needsReview={needsReview}
-            monitoring={monitoring}
-            quarantined={quarantined}
-            resolved={resolved}
-            loading={loading}
-            onCompose={() => setComposerOpen(true)}
-            onSelect={setSelectedId}
-            onViewAll={() => setView("incidents")}
+        {!connections.onboardingDone && !loading ? (
+          <ConnectWizard
+            connections={connections}
+            status={status}
+            onFinish={async (skip: boolean) => {
+              setConnections((current) => ({
+                ...current,
+                onboardingDone: true,
+              }));
+              await fetch("/api/connections", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ onboardingDone: true }),
+              });
+              void refresh();
+              setToast(
+                skip
+                  ? {
+                      title: "You can connect channels anytime",
+                      copy: "Open Settings → Connections to finish setup.",
+                    }
+                  : {
+                      title: "Channels connected",
+                      copy: "Your dashboard now shows only your connected channels.",
+                    },
+              );
+            }}
+            onDetected={(detected) =>
+              setConnections((current) => ({ ...current, platforms: detected }))
+            }
           />
-        )}
+        ) : (
+          <>
+            {view === "overview" && (
+              <Overview
+                incidents={visibleIncidents}
+                needsReview={needsReview}
+                monitoring={monitoring}
+                quarantined={quarantined}
+                resolved={resolved}
+                loading={loading}
+                onCompose={() => setComposerOpen(true)}
+                onSelect={setSelectedId}
+                onViewAll={() => setView("incidents")}
+              />
+            )}
 
-        {view === "incidents" && (
-          <IncidentsView
-            incidents={incidents}
-            loading={loading}
-            onSelect={setSelectedId}
-            onCompose={() => setComposerOpen(true)}
-            onRefresh={refresh}
-          />
+            {view === "incidents" && (
+              <IncidentsView
+                incidents={visibleIncidents}
+                loading={loading}
+                onSelect={setSelectedId}
+                onCompose={() => setComposerOpen(true)}
+                onRefresh={refresh}
+              />
+            )}
+          </>
         )}
 
         {view === "policy" && (
@@ -520,7 +582,17 @@ export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean 
         )}
 
         {view === "settings" && (
-          <SettingsView status={status} onRefresh={refresh} />
+          <SettingsView
+            status={status}
+            onRefresh={refresh}
+            onManageConnections={() => {
+              void fetch("/api/connections", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ onboardingDone: false }),
+              }).then(() => refresh());
+            }}
+          />
         )}
       </main>
 
@@ -840,6 +912,141 @@ export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean 
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+const CHANNEL_META: {
+  key: ChannelName;
+  name: string;
+  icon: string;
+  step: string;
+  hint: string;
+  configLabel: string;
+  configOk: (status: SystemStatus | null) => boolean;
+}[] = [
+  {
+    key: "telegram",
+    name: "Telegram",
+    icon: "send",
+    step: "Send any message to your bot on Telegram — it replies with a risk verdict and connects.",
+    hint: "Best to start here — takes 30 seconds.",
+    configLabel: "Telegram bot",
+    configOk: (status) => Boolean(status?.channels.telegram),
+  },
+  {
+    key: "discord",
+    name: "Discord",
+    icon: "message-square",
+    step: "Run /review <message> in your server after adding the bot to it.",
+    hint: "Needs the bot invited with Ban + Manage Messages permissions.",
+    configLabel: "Discord bot",
+    configOk: (status) => Boolean(status?.channels.discord),
+  },
+  {
+    key: "youtube",
+    name: "YouTube",
+    icon: "trending-up",
+    step: "Paste a video link on the Incidents page — its comments get analyzed.",
+    hint: "Import-based: paste any link to watch its comments.",
+    configLabel: "YouTube API",
+    configOk: (status) => Boolean(status?.channels.youtube),
+  },
+];
+
+function ConnectWizard(props: {
+  connections: Connections;
+  status: SystemStatus | null;
+  onFinish: (skip: boolean) => void;
+  onDetected: (platforms: ChannelName[]) => void;
+}) {
+  const connected = new Set(props.connections.platforms);
+  const allConnected = CHANNEL_META.every((channel) => connected.has(channel.key));
+
+  // Live auto-detection: poll while the wizard is open so the moment a
+  // channel delivers its first case, its card flips to "Connected".
+  useEffect(() => {
+    let cancelled = false;
+    async function poll() {
+      for (let attempt = 0; attempt < 40 && !cancelled; attempt += 1) {
+        try {
+          const res = await fetch("/api/connections", { cache: "no-store" });
+          const data = (await res.json()) as { connections?: Connections };
+          if (data.connections) {
+            props.onDetected(data.connections.platforms);
+          }
+        } catch {
+          /* transient */
+        }
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
+    }
+    void poll();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div className="cg-page cg-connect">
+      <section className="cg-connect-head">
+        <div className="cg-eyebrow">SETUP IN 2 MINUTES</div>
+        <h1>Connect your channels</h1>
+        <p>
+          CreaGuard watches the places your community talks to you — up to 3:
+          Telegram, Discord, and YouTube. Connect one or all; your dashboard
+          shows only the channels you've connected.
+        </p>
+        <div className="cg-connect-count">
+          {connected.size}/3 connected
+        </div>
+      </section>
+
+      <div className="cg-connect-grid">
+        {CHANNEL_META.map((channel) => {
+          const isConnected = connected.has(channel.key);
+          const configured = channel.configOk(props.status);
+          return (
+            <div
+              key={channel.key}
+              className={`cg-connect-card ${isConnected ? "connected" : ""}`}
+            >
+              <div className="cg-connect-card-head">
+                <span className="cg-connect-icon">
+                  <Icon name={channel.icon} size={16} />
+                </span>
+                <div>
+                  <strong>{channel.name}</strong>
+                  <p>{channel.hint}</p>
+                </div>
+                <span className={`cg-connect-status ${isConnected ? "ok" : ""}`}>
+                  {isConnected ? "✓ Connected" : "Not connected"}
+                </span>
+              </div>
+              <p className="cg-connect-step">{channel.step}</p>
+              {!configured && (
+                <p className="cg-connect-config-note">
+                  ⚠️ {channel.configLabel} isn't configured on the server yet —
+                  add its API key, then refresh this page.
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="cg-connect-actions">
+        <button className="cg-btn ghost" onClick={() => props.onFinish(true)}>
+          Skip for now
+        </button>
+        <button
+          className="cg-btn primary"
+          onClick={() => props.onFinish(false)}
+        >
+          {allConnected ? "Finish — you're protected" : "Continue to dashboard"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -1280,7 +1487,11 @@ function PolicyView(props: {
   );
 }
 
-function SettingsView(props: { status: SystemStatus | null; onRefresh: () => void }) {
+function SettingsView(props: {
+  status: SystemStatus | null;
+  onRefresh: () => void;
+  onManageConnections: () => void;
+}) {
   const rows = [
     {
       label: "Upstash Redis",
@@ -1334,6 +1545,9 @@ function SettingsView(props: { status: SystemStatus | null; onRefresh: () => voi
           <h1>Connections</h1>
           <p>Connect the real services that power CreaGuard.</p>
         </div>
+        <button className="cg-btn ghost" onClick={props.onManageConnections}>
+          <Icon name="send" size={14} /> Manage connections
+        </button>
         <button className="cg-btn ghost" onClick={props.onRefresh}>Refresh</button>
       </section>
 

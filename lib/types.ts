@@ -96,6 +96,20 @@ export interface PolicyProposal {
   mindAlias?: string;
 }
 
+/**
+ * Which channels a creator has connected to this workspace (max 3:
+ * telegram, youtube, discord). The dashboard shows only incidents from
+ * connected channels, so a creator who only sets up Telegram sees only
+ * Telegram — easy setup, no noise.
+ */
+export type ChannelName = "telegram" | "discord" | "youtube";
+
+export interface Connections {
+  platforms: ChannelName[];
+  /** True once the creator has finished (or skipped) the connect wizard. */
+  onboardingDone: boolean;
+}
+
 export interface SystemStatus {
   storage: "redis" | "file" | "memory";
   featherless: boolean;
@@ -103,5 +117,6 @@ export interface SystemStatus {
   channels: {
     telegram: boolean;
     youtube: boolean;
+    discord: boolean;
   };
 }

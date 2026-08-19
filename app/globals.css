@@ -1930,6 +1930,136 @@ img {
   color: var(--muted);
 }
 
+/* Connect-channels onboarding wizard */
+.cg-connect-head {
+  text-align: center;
+  max-width: 620px;
+  margin: 0 auto 28px;
+}
+
+.cg-connect-head h1 {
+  margin: 6px 0 10px;
+}
+
+.cg-connect-head p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0 auto;
+  max-width: 480px;
+}
+
+.cg-connect-count {
+  display: inline-flex;
+  margin-top: 14px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(139, 92, 246, 0.12);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  color: var(--violet);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cg-connect-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+.cg-connect-card {
+  padding: 18px;
+  border-radius: 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.cg-connect-card.connected {
+  border-color: rgba(61, 255, 168, 0.45);
+  background: linear-gradient(180deg, rgba(61, 255, 168, 0.07), var(--panel));
+}
+
+.cg-connect-card-head {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.cg-connect-icon {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: rgba(139, 92, 246, 0.15);
+  color: var(--violet);
+}
+
+.cg-connect-card.connected .cg-connect-icon {
+  background: rgba(61, 255, 168, 0.15);
+  color: var(--green);
+}
+
+.cg-connect-card-head strong {
+  display: block;
+  font-size: 14px;
+}
+
+.cg-connect-card-head p {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.cg-connect-status {
+  margin-left: auto;
+  flex: none;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.cg-connect-status.ok {
+  background: rgba(61, 255, 168, 0.14);
+  color: var(--green);
+}
+
+.cg-connect-step {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.cg-connect-config-note {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #e8b4b4;
+  background: rgba(248, 113, 113, 0.08);
+  border: 1px solid rgba(248, 113, 113, 0.2);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.cg-connect-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 26px;
+}
+
 /* Alert + toast */
 .cg-alert {
   display: flex;
