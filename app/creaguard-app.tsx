@@ -970,9 +970,30 @@ function ConnectWizard(props: {
 }) {
   const [stage, setStage] = useState<"intro" | "channels">("intro");
   const [active, setActive] = useState<ChannelName | null>(null);
+  const [links, setLinks] = useState<Record<string, string | null>>({});
   const connected = new Set(props.connections.platforms);
   const allConnected = CHANNEL_META.every((channel) => connected.has(channel.key));
   const anyConnected = connected.size > 0;
+
+  // Load the deep links (Telegram bot chat, Discord invite, YouTube) once,
+  // so clicking a channel can jump straight to the real app.
+  useEffect(() => {
+    void fetch("/api/connect/links", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { links?: Record<string, string | null> } | null) => {
+        if (data?.links) setLinks(data.links);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  function pickChannel(key: ChannelName) {
+    if (connected.has(key)) return;
+    setActive(key);
+    const url = links[key];
+    if (url) {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  }
 
   // On open, record when the wizard started so only channels that deliver a
   // NEW case (after this moment) count as connected. Then poll continuously
@@ -1056,7 +1077,7 @@ function ConnectWizard(props: {
                 <button
                   key={channel.key}
                   className={`cg-connect-card ${isConnected ? "connected" : ""} ${isActive ? "active" : ""}`}
-                  onClick={() => !isConnected && setActive(channel.key)}
+                  onClick={() => pickChannel(channel.key)}
                 >
                   <div className="cg-connect-card-head">
                     <span className="cg-connect-icon">
@@ -1075,9 +1096,24 @@ function ConnectWizard(props: {
                     <div className="cg-connect-waiting">
                       <span className="cg-minds-spinner" />
                       <div>
-                        <strong>Now open {channel.name} and do the step above</strong>
+                        <strong>
+                          {links[channel.key]
+                            ? `${channel.name} opened in a new tab — complete the step there`
+                            : `Now open ${channel.name} and do the step above`}
+                        </strong>
                         <p>This screen is watching — the moment your message
                         arrives, this card flips to Connected automatically.</p>
+                        {links[channel.key] && (
+                          <button
+                            className="cg-link"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              window.open(links[channel.key]!, "_blank", "noopener,noreferrer");
+                            }}
+                          >
+                            Open {channel.name} again
+                          </button>
+                        )}
                       </div>
                     </div>
                   )}
