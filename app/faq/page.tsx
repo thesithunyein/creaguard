@@ -7,27 +7,35 @@ import { Icon } from "../icons";
 const FAQS = [
   {
     q: "What is CreaGuard?",
-    a: "CreaGuard is a safety assistant for creators. It watches your community for threats, doxxing, scams, impersonation, and repeat harassment — and remembers context across days, so you never have to start from zero.",
+    a: "CreaGuard is a safety assistant for creators. It watches your community across Discord, Telegram, and YouTube for threats, doxxing, scams, impersonation, and repeat harassment — and remembers context across days, so no safety decision starts from zero.",
   },
   {
     q: "What problem does it solve?",
-    a: "Generic moderation catches spam and bad words, but it misses context, repeat offenders, and your own boundaries. CreaGuard connects the dots between incidents over time and protects you — not just the community.",
+    a: "Generic moderation catches spam and bad words, but it misses context, repeat offenders, and your own boundaries. CreaGuard connects the dots between incidents over time and remembers people across platforms — a troll on Discord and YouTube is one person, not two random messages. It protects you, not just the community.",
   },
   {
     q: "How does it work?",
-    a: "Three steps: 1) Connect your community or paste a message. 2) CreaGuard classifies it and scores the risk. 3) Your Mind reviews the case, drafts a decision, and you approve. Nothing happens without you.",
+    a: "Four steps: 1) Sign in and connect a channel (Telegram, Discord, or YouTube). 2) CreaGuard classifies every incoming message and scores the risk. 3) Your Mind reviews each case and drafts a recommended action. 4) You approve — or not. Nothing happens without you.",
   },
   {
     q: "Do I need to connect my social accounts?",
-    a: "No. You can paste any message and get a full safety review immediately. Connecting Discord, Telegram, or YouTube just makes messages flow in automatically so you don't have to copy them yourself.",
+    a: "Yes — connecting at least one channel is how it starts (you can connect up to 3: Telegram, Discord, YouTube). The wizard opens the real app for you, and the moment you message your bot or run /review, CreaGuard detects the connection live. Your dashboard stays empty until at least one channel is connected — by design, so you only ever see what you've protected.",
   },
   {
     q: "Does CreaGuard ban or report people automatically?",
-    a: "Never. CreaGuard recommends, you decide. Banning, blocking, and reporting always require your explicit approval — this is a hard limit, not a setting.",
+    a: "Never. CreaGuard recommends, you decide. It drafts the action — ban, timeout, or remove message — and you click Approve. Banning, blocking, and reporting always require your explicit approval. This is a hard limit, not a setting.",
   },
   {
     q: "What is “the Mind”?",
-    a: "The Mind is a persistent AI agent that remembers your rules and past incidents across sessions. It's why CreaGuard can connect a person's behavior from last week to today, instead of seeing every message in isolation.",
+    a: "The Mind is a persistent AI agent that remembers your rules and past incidents across sessions. It's why CreaGuard can connect a person's behavior from last week to today — and across platforms — instead of seeing every message in isolation. When you resolve a case, it learns your standard for next time.",
+  },
+  {
+    q: "How does the Mind improve over time?",
+    a: "Every decision you make — resolve, dismiss, ban, timeout — is sent back to the Mind as feedback. It also proposes updates to your safety policy based on your decisions; you approve or reject them. The more you use CreaGuard, the less it needs you.",
+  },
+  {
+    q: "What happens while I'm away?",
+    a: "CreaGuard keeps working: obvious scams are auto-quarantined, low-risk criticism is filed to monitoring, and a morning digest lands in your Telegram with new cases, repeat offenders, and what's waiting on you. Your Mind follows up on open cases on its own.",
   },
   {
     q: "Which platforms are supported?",
@@ -35,7 +43,7 @@ const FAQS = [
   },
   {
     q: "Is my data safe?",
-    a: "Incidents are stored durably, API keys live server-side only, and evidence is never deleted automatically. CreaGuard keeps a full audit trail of every decision.",
+    a: "Each creator signs in to a private workspace — no one else can read your incidents. Incidents are stored durably, API keys live server-side only, and evidence is never deleted automatically. CreaGuard keeps a full audit trail of every decision.",
   },
   {
     q: "How much does it cost?",
