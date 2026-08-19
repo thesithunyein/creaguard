@@ -41,20 +41,12 @@ export async function POST(request: Request) {
     incident.updatedAt = now.toISOString();
     delete incident.followUpAt;
     if (result.alias) incident.mindsAlias = result.alias;
-
-    // Capture the Mind's recommendation as a concrete proposed action so
-    // the dashboard can offer a one-click "Approve & execute".
-    if (result.reply) {
-      incident.proposedAction = result.reply;
-      incident.proposedActionAt = now.toISOString();
-    }
     await saveIncident(ws, incident);
 
     processed.push({
       id: incident.id,
       externalId: incident.externalId,
       mindsRelayed: result.connected,
-      proposedAction: Boolean(incident.proposedAction),
     });
   }
 

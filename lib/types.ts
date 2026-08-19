@@ -92,6 +92,8 @@ export interface PolicyProposal {
   summary: string;
   createdAt: string;
   status: "pending" | "accepted" | "rejected";
+  /** Minds conversation alias for the pending proposal request (async reply). */
+  mindAlias?: string;
 }
 
 export interface SystemStatus {

@@ -353,14 +353,35 @@ export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean 
     try {
       const res = await fetch("/api/policy/proposals", { method: "POST" });
       const data = (await res.json()) as {
-        proposal?: PolicyProposal;
+        thinking?: boolean;
         error?: string;
       };
-      if (!res.ok) throw new Error(data.error ?? "Your Mind did not propose a change.");
+      if (!res.ok) throw new Error(data.error ?? "Your Mind could not be reached.");
+      setToast({
+        title: "Your Mind is drafting a proposal",
+        copy: "It reviews your recent decisions, then the proposal appears here.",
+      });
+      // Poll until the Mind's reply materializes (arrives asynchronously).
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        const pollRes = await fetch("/api/policy/proposals", { cache: "no-store" });
+        const pollData = (await pollRes.json()) as { proposals: PolicyProposal[] };
+        const drafted = pollData.proposals.find(
+          (proposal) => proposal.status === "pending" && proposal.content,
+        );
+        if (drafted) {
+          setProposals(pollData.proposals);
+          setToast({
+            title: "Your Mind proposed a change",
+            copy: "Approve it to apply, or reject to keep the current policy.",
+          });
+          return;
+        }
+      }
       await refresh();
       setToast({
-        title: "Your Mind proposed a change",
-        copy: "Review it on the policy page and approve or reject it.",
+        title: "Still drafting",
+        copy: "Your Mind is taking a while — the proposal will appear when it's ready.",
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to ask your Mind.");
@@ -752,25 +773,28 @@ export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean 
                 )}
               </div>
 
-              {selected.proposedAction && (
-                <div className="cg-proposed-card">
-                  <div className="cg-proposed-head">
-                    <span className="cg-minds-avatar"><Icon name="sparkles" size={13} /></span>
-                    <div>
-                      <strong>Your Mind recommends</strong>
-                      <p className="cg-proposed-text">{mindReplyToText(selected.proposedAction)}</p>
+              {(() => {
+                const recommendation =
+                  selected.proposedAction ?? shownMindsReply ?? null;
+                if (!recommendation) return null;
+                const parsed = parseRecommendedAction(recommendation);
+                if (!parsed.action) return null;
+                const label =
+                  parsed.action === "ban"
+                    ? "Approve: ban user"
+                    : parsed.action === "timeout"
+                      ? "Approve: 24h timeout"
+                      : "Approve: remove message";
+                return (
+                  <div className="cg-proposed-card">
+                    <div className="cg-proposed-head">
+                      <span className="cg-minds-avatar"><Icon name="sparkles" size={13} /></span>
+                      <div>
+                        <strong>Your Mind recommends</strong>
+                        <p className="cg-proposed-text">{mindReplyToText(recommendation)}</p>
+                      </div>
                     </div>
-                  </div>
-                  {(() => {
-                    const parsed = parseRecommendedAction(selected.proposedAction);
-                    if (!parsed.action) return null;
-                    const label =
-                      parsed.action === "ban"
-                        ? "Approve: ban user"
-                        : parsed.action === "timeout"
-                          ? "Approve: 24h timeout"
-                          : "Approve: remove message";
-                    return enforceEnabled ? (
+                    {enforceEnabled ? (
                       <button
                         className="cg-btn danger cg-proposed-action"
                         onClick={() => enforceIncident(parsed.action!)}
@@ -781,10 +805,10 @@ export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean 
                       <p className="cg-drawer-note-hint">
                         Your Mind recommends “{parsed.match}” — {selectedPlatform === "youtube" ? "YouTube has no moderation API, so take this action manually." : "take this action manually on the platform."}
                       </p>
-                    );
-                  })()}
-                </div>
-              )}
+                    )}
+                  </div>
+                );
+              })()}
             </div>
             <div className="cg-drawer-actions">
               <button className="cg-btn ghost" onClick={() => updateIncident("monitoring")}>

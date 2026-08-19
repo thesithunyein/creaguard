@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { proposePolicyUpdate } from "@/lib/minds";
+import {
+  fetchMindsReplyForAlias,
+  sendPolicyProposalRequest,
+} from "@/lib/minds";
 import { newId } from "@/lib/ids";
 import {
   getIncidents,
@@ -13,17 +16,40 @@ import type { PolicyProposal } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
 
+/**
+ * Reads proposals. Any pending proposal whose Mind reply has since arrived
+ * is materialized here (lazy fetch) so the dashboard always shows the
+ * latest state without a serverless function waiting on the Mind.
+ */
 export async function GET() {
   const ws = await currentWorkspaceId();
-  return NextResponse.json({ proposals: await getProposals(ws) });
+  const proposals = await getProposals(ws);
+  const materialized = await Promise.all(
+    proposals.map(async (proposal) => {
+      if (
+        proposal.status === "pending" &&
+        proposal.mindAlias &&
+        !proposal.content
+      ) {
+        const reply = await fetchMindsReplyForAlias(proposal.mindAlias);
+        if (reply.reply) {
+          proposal.content = reply.reply;
+          proposal.summary = reply.reply.slice(0, 160);
+          await saveProposal(ws, proposal);
+        }
+      }
+      return proposal;
+    }),
+  );
+  return NextResponse.json({ proposals: materialized });
 }
 
 /**
- * Asks the Mind to propose a policy update. The proposal is stored as
- * pending; the creator approves or rejects it — the Mind never edits the
- * policy on its own.
+ * Asks the Mind to propose a policy update. Because the Mind replies
+ * asynchronously (~1–2 min), this stores a pending proposal immediately and
+ * returns — the reply is materialized on the next read. The creator still
+ * approves or rejects; the Mind never edits the policy on its own.
  */
 export async function POST() {
   const ws = await currentWorkspaceId();
@@ -45,32 +71,29 @@ export async function POST() {
         (incident.status === "resolved" || incident.status === "dismissed") &&
         incident.decisionNote,
     )
-    .map(
-      (incident) =>
-        `${incident.status}: ${incident.decisionNote}`,
-    );
+    .map((incident) => `${incident.status}: ${incident.decisionNote}`);
 
-  const reply = await proposePolicyUpdate(policy, decisions, ws);
-  if (!reply.reply) {
+  const result = await sendPolicyProposalRequest(policy, decisions, ws);
+  if (!result.alias) {
     return NextResponse.json(
-      {
-        error:
-          reply.error ??
-          "Your Mind did not reply yet — try again in a few seconds.",
-      },
+      { error: result.error ?? "Your Mind could not be reached." },
       { status: 502 },
     );
   }
 
   const proposal: PolicyProposal = {
     id: newId("prp"),
-    content: reply.reply,
-    summary: reply.reply.slice(0, 160),
+    content: "",
+    summary: "",
     createdAt: new Date().toISOString(),
     status: "pending",
+    mindAlias: result.alias,
   };
   await saveProposal(ws, proposal);
-  return NextResponse.json({ proposal }, { status: 201 });
+  return NextResponse.json(
+    { proposal, thinking: true, message: "Your Mind is drafting a proposal…" },
+    { status: 201 },
+  );
 }
 
 /**
@@ -95,6 +118,12 @@ export async function PATCH(request: Request) {
     if (proposal.status !== "pending") {
       return NextResponse.json(
         { error: "This proposal was already decided." },
+        { status: 409 },
+      );
+    }
+    if (!proposal.content) {
+      return NextResponse.json(
+        { error: "Your Mind is still drafting this proposal — check back shortly." },
         { status: 409 },
       );
     }

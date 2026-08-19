@@ -8,9 +8,6 @@ export interface MindsResult {
   reply?: string;
 }
 
-/** How long to wait for the Mind to reply inside a serverless function. */
-const REPLY_TIMEOUT_MS = 55_000;
-
 export interface MindsReplyResult {
   connected: boolean;
   reply?: string;
@@ -66,6 +63,9 @@ export async function sendToMinds(
       `Classification: ${incident.category}, severity ${incident.severity}, confidence ${latest?.classification?.confidence ?? 0}`,
       `Message: ${latest?.message ?? ""}`,
       `Recommendation: ${latest?.classification?.recommendedAction ?? "Manual review"}`,
+      "",
+      "Review this case and end your reply with exactly one recommended action on its own line:",
+      "ACTION: ban / ACTION: timeout / ACTION: delete / ACTION: monitor",
     ].join("\n");
 
     await client.sendMessage({ alias, messageText: message });
@@ -114,26 +114,7 @@ export async function followUpToMinds(
 
     await client.sendMessage({ alias, messageText: message });
 
-    // Wait for the Mind's recommendation so the dashboard can show a
-    // concrete "Approve & execute" action, not just free text.
-    const outcome = await client.waitForReply({
-      alias,
-      timeoutMs: REPLY_TIMEOUT_MS,
-      sentMessageText: message,
-    });
-    const reply =
-      !outcome.timedOut && outcome.reply.messageText?.trim()
-        ? outcome.reply.messageText.trim()
-        : undefined;
-
-    return {
-      connected: true,
-      alias,
-      reply,
-      message: reply
-        ? "Follow-up answered by your Mind."
-        : "Follow-up sent — the Mind did not reply in time.",
-    };
+    return { connected: true, alias, message: "Follow-up sent to your Mind." };
   } catch (error) {
     return {
       connected: true,
@@ -188,7 +169,7 @@ export async function sendDecisionToMinds(
  * Reads the latest reply from the creator's Mind in the conversation
  * history for this incident. Uses senderType (0|2 = Mind, 1 = human).
  */
-async function fetchMindsReplyForAlias(
+export async function fetchMindsReplyForAlias(
   alias: string,
 ): Promise<MindsReplyResult> {
   if (!mindsConfig()) {
@@ -231,16 +212,15 @@ export function policyAlias(workspaceId: string, nonce: string): string {
 }
 
 /**
- * Asks the Mind to propose a safety-policy update based on the creator's
- * recent decisions, then returns its reply. The creator approves or
- * rejects the proposal in the dashboard — the Mind never edits the policy
- * on its own.
+ * Sends the policy-proposal request to the Mind and returns the conversation
+ * alias immediately. The Mind's reply arrives asynchronously (~1–2 min), so
+ * the caller fetches it later via fetchMindsReplyForAlias.
  */
-export async function proposePolicyUpdate(
+export async function sendPolicyProposalRequest(
   policy: Policy,
   recentDecisions: string[],
   workspaceId: string,
-): Promise<MindsReplyResult> {
+): Promise<MindsResult> {
   if (!mindsConfig()) {
     return { connected: false, error: "Minds is not configured." };
   }
@@ -250,10 +230,7 @@ export async function proposePolicyUpdate(
     const config = mindsConfig();
     if (!config) return { connected: false, error: "Minds is not configured." };
 
-    const alias = policyAlias(
-      workspaceId,
-      Date.now().toString(36),
-    );
+    const alias = policyAlias(workspaceId, Date.now().toString(36));
     await client.ensureConversation(alias, config.mindId);
 
     const message = [
@@ -268,20 +245,7 @@ export async function proposePolicyUpdate(
     ].join("\n");
 
     await client.sendMessage({ alias, messageText: message });
-
-    // Wait for the Mind's proposal (streaming + history fallback).
-    const outcome = await client.waitForReply({
-      alias,
-      timeoutMs: REPLY_TIMEOUT_MS,
-      sentMessageText: message,
-    });
-    if (outcome.timedOut || !outcome.reply.messageText?.trim()) {
-      return {
-        connected: true,
-        error: "Your Mind did not reply in time — try again shortly.",
-      };
-    }
-    return { connected: true, reply: outcome.reply.messageText.trim() };
+    return { connected: true, alias };
   } catch (error) {
     return {
       connected: true,
@@ -301,6 +265,12 @@ export function parseRecommendedAction(
 ): { action: "ban" | "timeout" | "delete" | null; match?: string } {
   const text = (reply ?? "").toLowerCase();
   if (!text) return { action: null };
+  const actionLine = text.match(/action\s*:\s*(ban|timeout|delete|monitor)/);
+  if (actionLine) {
+    return actionLine[1] === "monitor"
+      ? { action: null }
+      : { action: actionLine[1] as "ban" | "timeout" | "delete", match: actionLine[1] };
+  }
   if (/\bban\b|permanently block|banned/.test(text)) {
     return { action: "ban", match: "ban" };
   }
