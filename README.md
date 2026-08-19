@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="public/logo.png" width="96" height="96" alt="CreaGuard logo" />
+<img src="public/logo.png" width="130" alt="CreaGuard logo" />
 
-# 🛡️ CreaGuard
+# CreaGuard
 
 **Creator Safety That Remembers Context — Not Just Rules.**
 
