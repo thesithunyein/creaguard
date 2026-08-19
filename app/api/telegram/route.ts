@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { waitUntil } from "@vercel/functions";
 import { processIncomingMessage } from "@/lib/intake";
-import { saveIncident } from "@/lib/store";
+import { recordChannelPing, saveIncident } from "@/lib/store";
 import { defaultWorkspaceId } from "@/lib/workspace";
 import { CATEGORY_LABELS, verdictFor } from "@/lib/verdict";
 
@@ -65,6 +65,12 @@ export async function POST(request: Request) {
   const authorId = message.from?.username
     ? `@${message.from.username}`
     : `tg:${message.from?.id ?? "unknown"}`;
+
+  // Any message from a creator's bot proves the channel is connected — even
+  // a /start command that just gets the guide back (no case is created).
+  waitUntil(
+    recordChannelPing(defaultWorkspaceId(), "telegram").catch(() => undefined),
+  );
 
   if (!text || text.startsWith("/")) {
     await sendTelegramMessage(chatId, GUIDE);

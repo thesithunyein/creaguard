@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import {
+  getChannelPings,
   getConnections,
   getIncidents,
   saveConnections,
@@ -42,9 +43,21 @@ export async function GET() {
     return NextResponse.json({ connections });
   }
 
-  const incidents = await getIncidents(await currentWorkspaceId());
+  const ws = await currentWorkspaceId();
+  const incidents = await getIncidents(ws);
+  const pings = await getChannelPings(ws);
   const startedAt = new Date(connections.wizardStartedAt).getTime();
   const detected = new Set<ChannelName>(connections.platforms);
+
+  // A channel counts as connected when a NEW case arrived after the wizard
+  // opened OR the bot heard from the creator (any message — even /start,
+  // which creates no case).
+  for (const channel of ALL_CHANNELS) {
+    const ping = pings[channel];
+    if (ping && new Date(ping).getTime() >= startedAt) {
+      detected.add(channel);
+    }
+  }
   for (const incident of incidents) {
     const platform = incident.events.at(-1)?.platform;
     if (

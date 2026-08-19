@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createPublicKey, verify } from "node:crypto";
 import { waitUntil } from "@vercel/functions";
 import { processIncomingMessage, type IntakeMeta } from "@/lib/intake";
+import { recordChannelPing } from "@/lib/store";
 import { defaultWorkspaceId } from "@/lib/workspace";
 import { CATEGORY_LABELS, verdictFor } from "@/lib/verdict";
 
@@ -124,6 +125,14 @@ export async function POST(request: Request) {
       sourceGuildId: interaction.guild_id,
       sourceChannelId: interaction.channel_id,
     };
+
+    // A verified interaction proves Discord is connected — the connect
+    // wizard counts it even before the first case finishes analyzing.
+    waitUntil(
+      recordChannelPing(defaultWorkspaceId(), "discord").catch(
+        () => undefined,
+      ),
+    );
 
     if (!message) {
       return NextResponse.json({

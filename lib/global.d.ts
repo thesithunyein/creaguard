@@ -1,4 +1,5 @@
 import type {
+  ChannelName,
   Connections,
   Incident,
   Policy,
@@ -13,6 +14,7 @@ interface CreaGuardMemoryBucket {
   suspects?: Suspect[];
   proposals?: PolicyProposal[];
   connections?: Connections;
+  channelPings?: Record<ChannelName, string>;
 }
 
 declare global {

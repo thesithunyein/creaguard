@@ -975,32 +975,34 @@ function ConnectWizard(props: {
   const anyConnected = connected.size > 0;
 
   // On open, record when the wizard started so only channels that deliver a
-  // NEW case (after this moment) count as connected. Then poll live: the
-  // moment a channel's first case arrives, its card flips to "Connected".
+  // NEW case (after this moment) count as connected. Then poll continuously
+  // while the wizard is open (never times out), so the moment a channel's
+  // first case arrives its card flips to "Connected".
   useEffect(() => {
     let cancelled = false;
-    async function start() {
-      await fetch("/api/connections", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wizardStartedAt: new Date().toISOString() }),
-      }).catch(() => undefined);
-      for (let attempt = 0; attempt < 40 && !cancelled; attempt += 1) {
-        try {
-          const res = await fetch("/api/connections", { cache: "no-store" });
-          const data = (await res.json()) as { connections?: Connections };
-          if (data.connections) {
-            props.onDetected(data.connections.platforms);
-          }
-        } catch {
-          /* transient */
+    void fetch("/api/connections", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wizardStartedAt: new Date().toISOString() }),
+    }).catch(() => undefined);
+
+    async function poll() {
+      if (cancelled) return;
+      try {
+        const res = await fetch("/api/connections", { cache: "no-store" });
+        const data = (await res.json()) as { connections?: Connections };
+        if (data.connections && !cancelled) {
+          props.onDetected(data.connections.platforms);
         }
-        await new Promise((resolve) => setTimeout(resolve, 3000));
+      } catch {
+        /* transient */
       }
     }
-    void start();
+    void poll();
+    const interval = setInterval(() => void poll(), 3000);
     return () => {
       cancelled = true;
+      clearInterval(interval);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);  return (
@@ -1070,11 +1072,14 @@ function ConnectWizard(props: {
                   </div>
                   <p className="cg-connect-step">{channel.step}</p>
                   {isActive && !isConnected && (
-                    <p className="cg-connect-waiting">
+                    <div className="cg-connect-waiting">
                       <span className="cg-minds-spinner" />
-                      Waiting for your {channel.name} message — CreaGuard
-                      detects it automatically.
-                    </p>
+                      <div>
+                        <strong>Now open {channel.name} and do the step above</strong>
+                        <p>This screen is watching — the moment your message
+                        arrives, this card flips to Connected automatically.</p>
+                      </div>
+                    </div>
                   )}
                   {!configured && !isConnected && (
                     <p className="cg-connect-config-note">

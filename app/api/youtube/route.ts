@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
+import { waitUntil } from "@vercel/functions";
 import { processIncomingMessage } from "@/lib/intake";
-import { dedupeSeen } from "@/lib/store";
+import { dedupeSeen, recordChannelPing } from "@/lib/store";
 import { currentWorkspaceId } from "@/lib/workspace";
 
 export const runtime = "nodejs";
@@ -95,8 +96,12 @@ export async function POST(request: Request) {
     }
   }
 
-  // Only process comments we have not seen before.
+  // A successful import proves YouTube is connected — the connect wizard
+  // counts it even if every comment was already seen.
   const ws = await currentWorkspaceId();
+  waitUntil(
+    recordChannelPing(ws, "youtube").catch(() => undefined),
+  );
   const fresh = await dedupeSeen(ws, "youtube", comments.map((c) => c.id));
 
   // Analysis is the slow part; process as many as fit in a short budget so

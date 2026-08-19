@@ -2088,12 +2088,28 @@ img {
   line-height: 1.5;
   color: var(--violet);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   background: rgba(139, 92, 246, 0.08);
   border: 1px solid rgba(139, 92, 246, 0.25);
   border-radius: 8px;
   padding: 8px 10px;
+}
+
+.cg-connect-waiting .cg-minds-spinner {
+  flex: none;
+  margin-top: 2px;
+}
+
+.cg-connect-waiting strong {
+  display: block;
+  font-size: 11.5px;
+}
+
+.cg-connect-waiting p {
+  margin: 3px 0 0;
+  font-size: 11px;
+  color: var(--muted);
 }
 
 /* Alert + toast */

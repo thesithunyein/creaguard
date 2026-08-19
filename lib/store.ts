@@ -2,6 +2,7 @@ import { Redis } from "@upstash/redis";
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import type {
+  ChannelName,
   Connections,
   Incident,
   Policy,
@@ -65,6 +66,9 @@ function proposalsKey(workspaceId: string): string {
 function connectionsKey(workspaceId: string): string {
   return `creaguard:connections:${workspaceId}`;
 }
+function channelPingsKey(workspaceId: string): string {
+  return `creaguard:channelpings:${workspaceId}`;
+}
 function incidentsFile(workspaceId: string): string {
   return `incidents-${safeId(workspaceId)}.json`;
 }
@@ -83,6 +87,9 @@ function proposalsFile(workspaceId: string): string {
 function connectionsFile(workspaceId: string): string {
   return `connections-${safeId(workspaceId)}.json`;
 }
+function channelPingsFile(workspaceId: string): string {
+  return `channelpings-${safeId(workspaceId)}.json`;
+}
 
 interface MemoryBucket {
   incidents?: Incident[];
@@ -91,6 +98,7 @@ interface MemoryBucket {
   suspects?: Suspect[];
   proposals?: PolicyProposal[];
   connections?: Connections;
+  channelPings?: Record<ChannelName, string>;
 }
 
 function memoryBucket(workspaceId: string): MemoryBucket {
@@ -459,6 +467,75 @@ export async function saveConnections(
 ): Promise<Connections> {
   await writeConnections(workspaceId, connections);
   return connections;
+}
+
+const EMPTY_PINGS: Record<ChannelName, string> = {
+  telegram: "",
+  discord: "",
+  youtube: "",
+};
+
+async function readChannelPings(
+  workspaceId: string,
+): Promise<Record<ChannelName, string>> {
+  const mode = storageMode();
+  if (mode === "redis") {
+    return (
+      (await redisClient()?.get<Record<ChannelName, string>>(
+        channelPingsKey(workspaceId),
+      )) ?? { ...EMPTY_PINGS }
+    );
+  }
+  if (mode === "file") {
+    return (
+      readFileJson<Record<ChannelName, string> | null>(
+        channelPingsFile(workspaceId),
+        null,
+      ) ?? { ...EMPTY_PINGS }
+    );
+  }
+  return memoryBucket(workspaceId).channelPings ?? { ...EMPTY_PINGS };
+}
+
+async function writeChannelPings(
+  workspaceId: string,
+  pings: Record<ChannelName, string>,
+): Promise<void> {
+  const mode = storageMode();
+  if (mode === "redis") {
+    await redisClient()?.set(channelPingsKey(workspaceId), pings);
+    return;
+  }
+  if (mode === "file") {
+    writeFileJson(channelPingsFile(workspaceId), pings);
+    return;
+  }
+  memoryBucket(workspaceId).channelPings = pings;
+}
+
+/**
+ * Records that a channel delivered *any* message (even a /start command or
+ * a guide reply that creates no incident). Used by the connect wizard so a
+ * channel counts as connected the moment the bot hears from the creator.
+ */
+export async function recordChannelPing(
+  workspaceId: string,
+  channel: ChannelName,
+  at = new Date().toISOString(),
+): Promise<void> {
+  const pings = await readChannelPings(workspaceId);
+  const existing = pings[channel];
+  if (existing && new Date(existing).getTime() >= new Date(at).getTime()) {
+    return;
+  }
+  pings[channel] = at;
+  await writeChannelPings(workspaceId, pings);
+}
+
+export async function getChannelPings(
+  workspaceId: string,
+): Promise<Record<ChannelName, string>> {
+  return readChannelPings(workspaceId);
 }
 
 export async function systemStatus(): Promise<SystemStatus> {
