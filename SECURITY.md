@@ -36,8 +36,10 @@ CreaGuard is a safety tool, so it enforces hard limits in code:
 - Incident content may contain sensitive or harassing material. In
   production, store only what your safety workflow requires and apply
   retention limits appropriate to your jurisdiction.
-- Per-creator workspaces isolate incidents between signed-in accounts; channel
-  webhooks map to an env-configured workspace because they carry no session.
+- Channel connections are per-user. Incidents currently live in an
+  env-configured workspace (`WORKSPACE_ID=demo`) so session-less webhooks and
+  the dashboard stay in sync; per-creator incident isolation (one workspace
+  per Clerk user) is the production roadmap item.
 
 ## Known limitations
 

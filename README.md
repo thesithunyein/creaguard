@@ -64,7 +64,7 @@ overworked creator.
 | **Policy evolution** | The Mind proposes policy updates from your decisions; you approve or reject. It never edits policy on its own. |
 | **Morning digest** | A daily Telegram summary: new cases, repeat offenders, and what's waiting on you. |
 | **Auto-watch (YouTube)** | Toggle **Keep watching** on any video and a daily cron re-checks it for new comments — the agent monitors the channel without anyone pasting a URL again. |
-| **Private workspaces** | Sign in (Clerk) and each creator gets an isolated workspace. |
+| **Sign-in + per-user connections** | Clerk auth keeps every creator's channel connections private and per-user. Incidents today live in the shared demo workspace (`WORKSPACE_ID=demo`) so session-less webhooks and the dashboard stay in sync; true per-creator incident isolation (one workspace per Clerk user) is the production roadmap item. |
 | **Guided onboarding** | After sign-in, a wizard opens the real channel app for you; the moment you message your bot, CreaGuard detects the connection live. Dashboard shows nothing until a channel is connected — by design. |
 
 ## How it works

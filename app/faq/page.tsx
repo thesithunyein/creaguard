@@ -43,7 +43,7 @@ const FAQS = [
   },
   {
     q: "Is my data safe?",
-    a: "Each creator signs in to a private workspace — no one else can read your incidents. Incidents are stored durably, API keys live server-side only, and evidence is never deleted automatically. CreaGuard keeps a full audit trail of every decision.",
+    a: "Signing in keeps your channel connections private and per-user. In the current demo build, incidents live in a shared workspace so session-less webhooks and the dashboard stay in sync; full per-creator incident isolation (one workspace per Clerk user) is the production roadmap item. Incidents are stored durably, API keys live server-side only, evidence is never deleted automatically, and every decision keeps a full audit trail.",
   },
   {
     q: "How much does it cost?",
