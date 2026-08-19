@@ -7,7 +7,12 @@ import {
   requiresHumanReview,
   shouldAutoQuarantine,
 } from "./risk";
-import { getIncidents, getPolicy, saveIncident } from "./store";
+import {
+  getIncidents,
+  getPolicy,
+  saveIncident,
+} from "./store";
+import { resolveSuspect, suspectIncidentCount } from "./suspects";
 import type { Incident, IncidentEvent, IncidentStatus } from "./types";
 
 /** Source-channel pointers captured at intake, used for enforcement later. */
@@ -47,10 +52,17 @@ export async function processIncomingMessage(
       ? "needs_review"
       : "monitoring";
 
-  const { score, severity } = computeRisk(
-    classification,
-    related.reduce((sum, item) => sum + item.events.length, 0),
-  );
+  // Cross-platform entity memory: count the author's incidents across ALL
+  // platforms (via the suspect profile), not just same-platform events.
+  const crossPlatformCount = authorId
+    ? await suspectIncidentCount(workspaceId, authorId)
+    : 0;
+  const repetitionSignal =
+    crossPlatformCount > 0
+      ? crossPlatformCount
+      : related.reduce((sum, item) => sum + item.events.length, 0);
+
+  const { score, severity } = computeRisk(classification, repetitionSignal);
   const followUpAt = computeFollowUpAt(score);
 
   const now = new Date().toISOString();
@@ -81,6 +93,21 @@ export async function processIncomingMessage(
   };
 
   await saveIncident(workspaceId, incident);
+
+  // Entity memory: link this case to the author's cross-platform profile
+  // so the Mind sees "this person has history" across channels.
+  if (authorId) {
+    const suspect = await resolveSuspect(
+      workspaceId,
+      authorId,
+      platform,
+      incident,
+    );
+    if (suspect) {
+      incident.suspectId = suspect.id;
+      await saveIncident(workspaceId, incident);
+    }
+  }
 
   // Autonomous follow-up: high-risk messages are relayed to the Mind the
   // moment they arrive — no human click required.

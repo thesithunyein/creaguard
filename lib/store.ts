@@ -1,7 +1,13 @@
 import { Redis } from "@upstash/redis";
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import type { Incident, Policy, SystemStatus } from "./types";
+import type {
+  Incident,
+  Policy,
+  PolicyProposal,
+  Suspect,
+  SystemStatus,
+} from "./types";
 
 type StorageMode = "redis" | "file" | "memory";
 
@@ -49,6 +55,12 @@ function policyKey(workspaceId: string): string {
 function seenKey(workspaceId: string): string {
   return `creaguard:seen:${workspaceId}`;
 }
+function suspectsKey(workspaceId: string): string {
+  return `creaguard:suspects:${workspaceId}`;
+}
+function proposalsKey(workspaceId: string): string {
+  return `creaguard:proposals:${workspaceId}`;
+}
 function incidentsFile(workspaceId: string): string {
   return `incidents-${safeId(workspaceId)}.json`;
 }
@@ -58,11 +70,19 @@ function policyFile(workspaceId: string): string {
 function seenFile(workspaceId: string): string {
   return `seen-${safeId(workspaceId)}.json`;
 }
+function suspectsFile(workspaceId: string): string {
+  return `suspects-${safeId(workspaceId)}.json`;
+}
+function proposalsFile(workspaceId: string): string {
+  return `proposals-${safeId(workspaceId)}.json`;
+}
 
 interface MemoryBucket {
   incidents?: Incident[];
   policy?: Policy;
   seen?: Record<string, string[]>;
+  suspects?: Suspect[];
+  proposals?: PolicyProposal[];
 }
 
 function memoryBucket(workspaceId: string): MemoryBucket {
@@ -282,6 +302,106 @@ export async function dedupeSeen(
     await writeSeen(workspaceId, seen);
   }
   return fresh;
+}
+
+async function readSuspects(workspaceId: string): Promise<Suspect[]> {
+  const mode = storageMode();
+  if (mode === "redis") {
+    return (
+      (await redisClient()?.get<Suspect[]>(suspectsKey(workspaceId))) ?? []
+    );
+  }
+  if (mode === "file") {
+    return readFileJson<Suspect[] | null>(suspectsFile(workspaceId), null) ?? [];
+  }
+  return memoryBucket(workspaceId).suspects ?? [];
+}
+
+async function writeSuspects(
+  workspaceId: string,
+  suspects: Suspect[],
+): Promise<void> {
+  const mode = storageMode();
+  if (mode === "redis") {
+    await redisClient()?.set(suspectsKey(workspaceId), suspects);
+    return;
+  }
+  if (mode === "file") {
+    writeFileJson(suspectsFile(workspaceId), suspects);
+    return;
+  }
+  memoryBucket(workspaceId).suspects = suspects;
+}
+
+async function readProposals(workspaceId: string): Promise<PolicyProposal[]> {
+  const mode = storageMode();
+  if (mode === "redis") {
+    return (
+      (await redisClient()?.get<PolicyProposal[]>(proposalsKey(workspaceId))) ??
+      []
+    );
+  }
+  if (mode === "file") {
+    return (
+      readFileJson<PolicyProposal[] | null>(proposalsFile(workspaceId), null) ??
+      []
+    );
+  }
+  return memoryBucket(workspaceId).proposals ?? [];
+}
+
+async function writeProposals(
+  workspaceId: string,
+  proposals: PolicyProposal[],
+): Promise<void> {
+  const mode = storageMode();
+  if (mode === "redis") {
+    await redisClient()?.set(proposalsKey(workspaceId), proposals);
+    return;
+  }
+  if (mode === "file") {
+    writeFileJson(proposalsFile(workspaceId), proposals);
+    return;
+  }
+  memoryBucket(workspaceId).proposals = proposals;
+}
+
+export async function getSuspects(workspaceId: string): Promise<Suspect[]> {
+  const suspects = await readSuspects(workspaceId);
+  return suspects.sort(
+    (a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime(),
+  );
+}
+
+export async function saveSuspect(
+  workspaceId: string,
+  suspect: Suspect,
+): Promise<Suspect> {
+  const suspects = await readSuspects(workspaceId);
+  const index = suspects.findIndex((item) => item.id === suspect.id);
+  if (index >= 0) suspects[index] = suspect;
+  else suspects.push(suspect);
+  await writeSuspects(workspaceId, suspects);
+  return suspect;
+}
+
+export async function getProposals(workspaceId: string): Promise<PolicyProposal[]> {
+  const proposals = await readProposals(workspaceId);
+  return proposals.sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+}
+
+export async function saveProposal(
+  workspaceId: string,
+  proposal: PolicyProposal,
+): Promise<PolicyProposal> {
+  const proposals = await readProposals(workspaceId);
+  const index = proposals.findIndex((item) => item.id === proposal.id);
+  if (index >= 0) proposals[index] = proposal;
+  else proposals.unshift(proposal);
+  await writeProposals(workspaceId, proposals);
+  return proposal;
 }
 
 export async function systemStatus(): Promise<SystemStatus> {

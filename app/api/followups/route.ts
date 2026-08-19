@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { followUpToMinds } from "@/lib/minds";
+import {
+  fetchMindsReply,
+  followUpToMinds,
+} from "@/lib/minds";
 import { getIncidents, getPolicy, saveIncident } from "@/lib/store";
 import { currentWorkspaceId } from "@/lib/workspace";
 
@@ -42,10 +45,22 @@ export async function POST(request: Request) {
     if (result.alias) incident.mindsAlias = result.alias;
     await saveIncident(ws, incident);
 
+    // Capture the Mind's recommendation as a concrete proposed action so
+    // the dashboard can offer a one-click "Approve & execute".
+    if (incident.mindsAlias) {
+      const reply = await fetchMindsReply(incident);
+      if (reply.reply) {
+        incident.proposedAction = reply.reply;
+        incident.proposedActionAt = now.toISOString();
+      }
+    }
+    await saveIncident(ws, incident);
+
     processed.push({
       id: incident.id,
       externalId: incident.externalId,
       mindsRelayed: result.connected,
+      proposedAction: Boolean(incident.proposedAction),
     });
   }
 

@@ -9,9 +9,11 @@ import {
 import type {
   Incident,
   Policy,
+  PolicyProposal,
   RiskCategory,
   SystemStatus,
 } from "@/lib/types";
+import { parseRecommendedAction } from "@/lib/minds";
 import { Icon } from "./icons";
 
 type View = "overview" | "incidents" | "policy" | "settings";
@@ -116,15 +118,18 @@ export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean 
   const [mindsState, setMindsState] = useState<"idle" | "pending" | "reply" | "error">("idle");
   const [mindsReload, setMindsReload] = useState(0);
   const [decisionNote, setDecisionNote] = useState("");
+  const [proposals, setProposals] = useState<PolicyProposal[]>([]);
+  const [proposalBusy, setProposalBusy] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [incidentsRes, policyRes, statusRes] = await Promise.all([
+      const [incidentsRes, policyRes, statusRes, proposalsRes] = await Promise.all([
         fetch("/api/incidents", { cache: "no-store" }),
         fetch("/api/policy", { cache: "no-store" }),
         fetch("/api/health", { cache: "no-store" }),
+        fetch("/api/policy/proposals", { cache: "no-store" }),
       ]);
       if (!incidentsRes.ok || !policyRes.ok || !statusRes.ok) {
         throw new Error("Failed to load workspace data.");
@@ -132,10 +137,14 @@ export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean 
       const incidentsData = (await incidentsRes.json()) as { incidents: Incident[] };
       const policyData = (await policyRes.json()) as { policy: Policy };
       const statusData = (await statusRes.json()) as { status: SystemStatus };
+      const proposalsData = proposalsRes.ok
+        ? ((await proposalsRes.json()) as { proposals: PolicyProposal[] })
+        : { proposals: [] as PolicyProposal[] };
       setIncidents(incidentsData.incidents);
       setPolicy(policyData.policy);
       setPolicyDraft(policyData.policy.content);
       setStatus(statusData.status);
+      setProposals(proposalsData.proposals);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load workspace data.");
     } finally {
@@ -285,13 +294,28 @@ export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean 
     }
   }
 
-  async function enforceIncident(action: "ban" | "delete") {
+  const suspectIncidents = useMemo(() => {
+    if (!selected?.suspectId) return [];
+    return incidents.filter((item) => item.suspectId === selected.suspectId);
+  }, [incidents, selected]);
+  const suspectPlatforms = useMemo(() => {
+    const set = new Set<string>();
+    for (const item of suspectIncidents) {
+      const platform = item.events.at(-1)?.platform;
+      if (platform) set.add(platform);
+    }
+    return [...set];
+  }, [suspectIncidents]);
+
+  async function enforceIncident(action: "ban" | "timeout" | "delete") {
     if (!selected) return;
     const platform = selected.events.at(-1)?.platform ?? "this platform";
     const verb =
       action === "ban"
         ? "ban this user"
-        : "delete the offending message";
+        : action === "timeout"
+          ? "timeout this user for 24 hours"
+          : "delete the offending message";
     if (
       !window.confirm(
         `This will ${verb} on ${platform}. It is real and irreversible. Continue?`,
@@ -321,6 +345,48 @@ export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean 
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Enforcement failed.");
+    }
+  }
+
+  async function askMindForProposal() {
+    setProposalBusy(true);
+    try {
+      const res = await fetch("/api/policy/proposals", { method: "POST" });
+      const data = (await res.json()) as {
+        proposal?: PolicyProposal;
+        error?: string;
+      };
+      if (!res.ok) throw new Error(data.error ?? "Your Mind did not propose a change.");
+      await refresh();
+      setToast({
+        title: "Your Mind proposed a change",
+        copy: "Review it on the policy page and approve or reject it.",
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to ask your Mind.");
+    } finally {
+      setProposalBusy(false);
+    }
+  }
+
+  async function decideProposal(proposalId: string, approve: boolean) {
+    try {
+      const res = await fetch("/api/policy/proposals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: proposalId, approve }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Failed to update proposal.");
+      await refresh();
+      setToast({
+        title: approve ? "Policy updated by your Mind" : "Proposal rejected",
+        copy: approve
+          ? "The proposed policy is now active."
+          : "The proposal was dismissed; policy unchanged.",
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update proposal.");
     }
   }
 
@@ -425,6 +491,10 @@ export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean 
             saving={policySaving}
             onSave={savePolicyNow}
             updatedAt={policy?.updatedAt ?? ""}
+            proposals={proposals}
+            proposalBusy={proposalBusy}
+            onAskMind={askMindForProposal}
+            onDecideProposal={decideProposal}
           />
         )}
 
@@ -544,6 +614,37 @@ export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean 
                 </div>
               ))}
 
+              {suspectIncidents.length > 1 && (
+                <div className="cg-suspect-card">
+                  <div className="cg-suspect-head">
+                    <span className="cg-suspect-icon"><Icon name="users" size={14} /></span>
+                    <div>
+                      <strong>Repeat offender — {suspectIncidents[0].events.at(-1)?.authorId || "unknown"}</strong>
+                      <p>
+                        {suspectIncidents.length} incidents across {suspectPlatforms.length} platform{suspectPlatforms.length === 1 ? "" : "s"}
+                        {suspectPlatforms.length > 1 ? " — your Mind sees this person across channels." : " — same person, same channel."}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="cg-suspect-list">
+                    {suspectIncidents.map((item) => (
+                      <button
+                        key={item.id}
+                        className={`cg-suspect-row ${item.id === selected.id ? "current" : ""}`}
+                        onClick={() => setSelectedId(item.id)}
+                      >
+                        <span className={`cg-tag tone-${categoryTone[item.category]}`}>
+                          {categoryLabels[item.category]}
+                        </span>
+                        <span>{item.events.at(-1)?.platform}</span>
+                        <span className="cg-muted">{item.externalId}</span>
+                        <span className="cg-score-pill">{item.riskScore}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="cg-drawer-section">Analysis</div>
               <div className="cg-analysis">
                 <div className="cg-analysis-row">
@@ -650,6 +751,40 @@ export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean 
                   </>
                 )}
               </div>
+
+              {selected.proposedAction && (
+                <div className="cg-proposed-card">
+                  <div className="cg-proposed-head">
+                    <span className="cg-minds-avatar"><Icon name="sparkles" size={13} /></span>
+                    <div>
+                      <strong>Your Mind recommends</strong>
+                      <p className="cg-proposed-text">{mindReplyToText(selected.proposedAction)}</p>
+                    </div>
+                  </div>
+                  {(() => {
+                    const parsed = parseRecommendedAction(selected.proposedAction);
+                    if (!parsed.action) return null;
+                    const label =
+                      parsed.action === "ban"
+                        ? "Approve: ban user"
+                        : parsed.action === "timeout"
+                          ? "Approve: 24h timeout"
+                          : "Approve: remove message";
+                    return enforceEnabled ? (
+                      <button
+                        className="cg-btn danger cg-proposed-action"
+                        onClick={() => enforceIncident(parsed.action!)}
+                      >
+                        <Icon name="check" size={14} /> {label}
+                      </button>
+                    ) : (
+                      <p className="cg-drawer-note-hint">
+                        Your Mind recommends “{parsed.match}” — {selectedPlatform === "youtube" ? "YouTube has no moderation API, so take this action manually." : "take this action manually on the platform."}
+                      </p>
+                    );
+                  })()}
+                </div>
+              )}
             </div>
             <div className="cg-drawer-actions">
               <button className="cg-btn ghost" onClick={() => updateIncident("monitoring")}>
@@ -997,7 +1132,13 @@ function PolicyView(props: {
   saving: boolean;
   onSave: () => void;
   updatedAt: string;
+  proposals: PolicyProposal[];
+  proposalBusy: boolean;
+  onAskMind: () => void;
+  onDecideProposal: (id: string, approve: boolean) => void;
 }) {
+  const pending = props.proposals.filter((proposal) => proposal.status === "pending");
+  const history = props.proposals.filter((proposal) => proposal.status !== "pending");
   return (
     <div className="cg-page">
       <section className="cg-page-head">
@@ -1010,6 +1151,37 @@ function PolicyView(props: {
           {props.saving ? "Saving…" : "Save policy"}
         </button>
       </section>
+
+      {pending.length > 0 && (
+        <div className="cg-panel cg-proposals">
+          <div className="cg-panel-head">
+            <div>
+              <h2>Your Mind proposes a policy change</h2>
+              <p>It learned from your decisions — approve to make it active, or reject to keep the current policy.</p>
+            </div>
+          </div>
+          {pending.map((proposal) => (
+            <div className="cg-proposal" key={proposal.id}>
+              <p className="cg-proposal-content">{proposal.content}</p>
+              <div className="cg-proposal-actions">
+                <span className="cg-muted">Proposed {relativeTime(proposal.createdAt)}</span>
+                <button
+                  className="cg-btn danger"
+                  onClick={() => props.onDecideProposal(proposal.id, false)}
+                >
+                  Reject
+                </button>
+                <button
+                  className="cg-btn primary"
+                  onClick={() => props.onDecideProposal(proposal.id, true)}
+                >
+                  <Icon name="check" size={14} /> Approve & apply
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="cg-split cg-policy-split">
         <div className="cg-panel">
@@ -1041,6 +1213,43 @@ function PolicyView(props: {
             <div><span><Icon name="sparkles" size={13} /></span><div><strong>Calm response tone</strong><small>Drafts avoid escalation</small></div></div>
             <div><span><Icon name="trending-up" size={13} /></span><div><strong>Escalate repeat targeting</strong><small>Connected events trigger review</small></div></div>
           </div>
+          <div className="cg-policy-mind-block">
+            <div className="cg-panel-head">
+              <div>
+                <h2>Policy evolution</h2>
+                <p>Let your Mind propose updates from your decisions</p>
+              </div>
+            </div>
+            <button
+              className="cg-btn ghost"
+              onClick={props.onAskMind}
+              disabled={props.proposalBusy || pending.length > 0}
+            >
+              <Icon name="sparkles" size={14} />
+              {props.proposalBusy
+                ? "Asking your Mind…"
+                : pending.length > 0
+                  ? "Proposal awaiting your review"
+                  : "Ask your Mind to propose an update"}
+            </button>
+          </div>
+          {history.length > 0 && (
+            <div className="cg-proposal-history">
+              <div className="cg-panel-head">
+                <div>
+                  <h2>Proposal history</h2>
+                </div>
+              </div>
+              {history.slice(0, 4).map((proposal) => (
+                <div className="cg-proposal-history-row" key={proposal.id}>
+                  <span className={`cg-tag tone-${proposal.status === "accepted" ? "safe" : "neutral"}`}>
+                    {proposal.status}
+                  </span>
+                  <p>{proposal.summary}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -1081,9 +1290,15 @@ function SettingsView(props: { status: SystemStatus | null; onRefresh: () => voi
     },
     {
       label: "Scheduled follow-up",
-      detail: "Endpoint ready",
-      ok: false,
-      hint: "Point a cron job at /api/followups with the CRON_SECRET bearer token.",
+      detail: "Daily 09:00 UTC",
+      ok: true,
+      hint: "The Mind re-reviews open cases and proposes the next step automatically.",
+    },
+    {
+      label: "Morning digest",
+      detail: "Daily 08:00 UTC",
+      ok: true,
+      hint: "A Telegram summary of new cases, repeat offenders, and pending decisions.",
     },
   ];
 

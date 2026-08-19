@@ -165,8 +165,8 @@ export async function sendDecisionToMinds(
  * Reads the latest reply from the creator's Mind in the conversation
  * history for this incident. Uses senderType (0|2 = Mind, 1 = human).
  */
-export async function fetchMindsReply(
-  incident: Incident,
+async function fetchMindsReplyForAlias(
+  alias: string,
 ): Promise<MindsReplyResult> {
   if (!mindsConfig()) {
     return { connected: false, error: "Minds is not configured." };
@@ -174,9 +174,7 @@ export async function fetchMindsReply(
 
   try {
     const client = await mindsClient();
-    const history = await client.getHistory(incidentAlias(incident), {
-      limit: 20,
-    });
+    const history = await client.getHistory(alias, { limit: 20 });
     const mindMessages = history.filter(
       (row) => row.senderType === 0 || row.senderType === 2,
     );
@@ -193,4 +191,82 @@ export async function fetchMindsReply(
       error: error instanceof Error ? error.message : "Failed to read Minds reply.",
     };
   }
+}
+
+export async function fetchMindsReply(
+  incident: Incident,
+): Promise<MindsReplyResult> {
+  return fetchMindsReplyForAlias(incidentAlias(incident));
+}
+
+/** Conversation alias for policy-evolution proposals. */
+export function policyAlias(workspaceId: string): string {
+  return `creaguard-policy-${workspaceId}`;
+}
+
+/**
+ * Asks the Mind to propose a safety-policy update based on the creator's
+ * recent decisions, then returns its reply. The creator approves or
+ * rejects the proposal in the dashboard — the Mind never edits the policy
+ * on its own.
+ */
+export async function proposePolicyUpdate(
+  policy: Policy,
+  recentDecisions: string[],
+  workspaceId: string,
+): Promise<MindsReplyResult> {
+  if (!mindsConfig()) {
+    return { connected: false, error: "Minds is not configured." };
+  }
+
+  try {
+    const client = await mindsClient();
+    const config = mindsConfig();
+    if (!config) return { connected: false, error: "Minds is not configured." };
+
+    const alias = policyAlias(workspaceId);
+    await client.ensureConversation(alias, config.mindId);
+
+    const message = [
+      `Current safety policy: ${policy.content}`,
+      `Recent creator decisions:`,
+      ...(recentDecisions.length > 0
+        ? recentDecisions.slice(0, 8)
+        : ["(no decisions recorded yet)"]),
+      "",
+      "Based on these decisions, propose ONE concrete improvement to the safety policy.",
+      "Reply with the proposed new policy text only — a single paragraph, under 200 words.",
+    ].join("\n");
+
+    await client.sendMessage({ alias, messageText: message });
+    return fetchMindsReplyForAlias(alias);
+  } catch (error) {
+    return {
+      connected: true,
+      error: error instanceof Error ? error.message : "Minds policy proposal failed.",
+    };
+  }
+}
+
+/**
+ * Maps a Mind recommendation into a concrete, enforceable action so the
+ * dashboard can offer a one-click "Approve & execute" instead of leaving
+ * the recommendation as free text. Returns null when the Mind did not
+ * recommend an enforceable action (e.g. "just monitor").
+ */
+export function parseRecommendedAction(
+  reply: string | undefined | null,
+): { action: "ban" | "timeout" | "delete" | null; match?: string } {
+  const text = (reply ?? "").toLowerCase();
+  if (!text) return { action: null };
+  if (/\bban\b|permanently block|banned/.test(text)) {
+    return { action: "ban", match: "ban" };
+  }
+  if (/\btimeout\b|restrict|mute for|24h/.test(text)) {
+    return { action: "timeout", match: "timeout" };
+  }
+  if (/\bdelete\b|remove the message|delete the message|remove message/.test(text)) {
+    return { action: "delete", match: "delete" };
+  }
+  return { action: null };
 }

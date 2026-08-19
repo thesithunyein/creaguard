@@ -58,11 +58,40 @@ export interface Incident {
   sourceGuildId?: string;
   sourceChannelId?: string;
   sourceMessageId?: string;
+  /** Cross-platform offender profile this case belongs to (entity memory). */
+  suspectId?: string;
+  /** The Mind's autonomous recommendation for this open case, surfaced as a one-click action. */
+  proposedAction?: string;
+  proposedActionAt?: string;
 }
 
 export interface Policy {
   content: string;
   updatedAt: string;
+}
+
+/**
+ * Cross-platform offender profile: one identity, many handles/platforms.
+ * Built by linking incidents whose normalized author handle matches, so
+ * the Mind's memory is about *people*, not just cases.
+ */
+export interface Suspect {
+  id: string;
+  handle: string;
+  aliases: { handle: string; platform: string }[];
+  incidentIds: string[];
+  platforms: string[];
+  firstSeen: string;
+  lastSeen: string;
+}
+
+/** A policy change the Mind proposed; the creator approves or rejects it. */
+export interface PolicyProposal {
+  id: string;
+  content: string;
+  summary: string;
+  createdAt: string;
+  status: "pending" | "accepted" | "rejected";
 }
 
 export interface SystemStatus {

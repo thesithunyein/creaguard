@@ -12,7 +12,11 @@ CreaGuard is a real, API-backed web application built for the **Moderation & Com
 - **Human-in-the-loop review** — cases move through `needs_review`, `monitoring`, `resolved`, and `dismissed`. Serious actions are never automated.
 - **Auto-quarantine tier** — obvious scams with high confidence are quarantined automatically: hidden from the main queue so busy creators never see obvious spam, but still reviewable and restorable.
 - **Risk scoring** — deterministic severity/confidence scoring with repetition weighting and follow-up scheduling.
-- **Scheduled follow-ups** — `POST /api/followups` promotes due unresolved cases back to review (protect the endpoint with `CRON_SECRET`).
+- **Scheduled follow-ups** — `POST /api/followups` promotes due unresolved cases back to review, captures the Mind's recommendation, and stores it as a one-click **proposed action** on the case (protect the endpoint with `CRON_SECRET`).
+- **Proposed actions** — the Mind's autonomous recommendation appears in the drawer as **Approve: ban / timeout / remove message**; one click runs the human-confirmed enforcement and teaches the decision back.
+- **Cross-platform suspect profiles** — normalized author handles link incidents into one offender profile (entity memory), so a repeat offender who moves from Discord to YouTube is flagged and scores higher risk.
+- **Morning digest** — `POST /api/digest` (daily 08:00 UTC cron) sends a Telegram summary of new cases, repeat offenders, and pending decisions to `DIGEST_TELEGRAM_CHAT_ID`.
+- **Policy evolution** — `POST /api/policy/proposals` asks the Mind to propose a policy update from your decisions; you approve or reject it in the dashboard. The Mind never edits the policy on its own.
 - **Minds relay** — with `MINDS_BUILDER_API_KEY` and `MINDS_MIND_ID`, a case is relayed to your Mind through the official `@animocabrands/minds-client-lib`. The relay is non-blocking: the case is sent immediately, the conversation alias is stored on the incident, and the Mind's reply is read back from conversation history into a live **Mind review** panel in the case drawer. This proves cross-session memory and continuity: the Mind sees every prior case in the same conversation.
 - **Decision feedback loop** — when you resolve or dismiss a case with a decision note, the note is sent back to your Mind as the creator's standard for similar cases. The Mind needs less human input over time.
 - **Multi-channel intake** — every channel funnels into one shared pipeline (`lib/intake.ts`): manual paste, Discord `/review`, Telegram bot messages, and YouTube comments imported from a video link. Platform differences are intake only — analysis, risk, quarantine, and the Mind are identical everywhere.
@@ -49,7 +53,8 @@ Without any environment variables, the app runs with a local file store and manu
 | `MINDS_BUILDER_API_KEY` / `MINDS_MIND_ID` | Relay cases to a Minds agent |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` | Optional Clerk auth (private per-creator workspaces) |
 | `WORKSPACE_ID` | Workspace webhooks write into when no one is signed in (default `demo`) |
-| `CRON_SECRET` | Bearer secret for the follow-up endpoint |
+| `CRON_SECRET` | Bearer secret for the follow-up and digest endpoints |
+| `DIGEST_TELEGRAM_CHAT_ID` | Telegram chat that receives the morning digest (numeric id; falls back to the most recent bot chat) |
 | `DISCORD_BOT_TOKEN` / `DISCORD_APPLICATION_ID` / `DISCORD_PUBLIC_KEY` | Discord `/review` slash command |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_BOT_SECRET` | Telegram bot webhook (run `scripts/setup-telegram.mjs`) |
 | `YOUTUBE_API_KEY` | YouTube video-URL comment import |
