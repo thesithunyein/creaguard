@@ -1,32 +1,21 @@
 import { NextResponse } from "next/server";
 import { waitUntil } from "@vercel/functions";
-import { processIncomingMessage } from "@/lib/intake";
-import { dedupeSeen, recordChannelPing } from "@/lib/store";
+import {
+  addWatchedVideo,
+  getWatchedVideos,
+  recordChannelPing,
+  removeWatchedVideo,
+} from "@/lib/store";
 import { currentWorkspaceId } from "@/lib/workspace";
+import { fetchVideoTitle, importVideoComments, parseVideoId } from "@/lib/youtube";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const YOUTUBE_API = "https://www.googleapis.com/youtube/v3";
-
-/** Extracts a YouTube video id from common URL shapes and bare ids. */
-function parseVideoId(input: string): string | null {
-  const trimmed = input.trim();
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([\w-]{11})/,
-    /^([\w-]{11})$/,
-  ];
-  for (const pattern of patterns) {
-    const match = trimmed.match(pattern);
-    if (match) return match[1];
-  }
-  return null;
-}
-
-interface CommentShape {
-  id: string;
-  author: string;
-  text: string;
+export async function GET() {
+  const ws = await currentWorkspaceId();
+  const videos = await getWatchedVideos(ws);
+  return NextResponse.json({ videos });
 }
 
 export async function POST(request: Request) {
@@ -38,7 +27,7 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: { videoUrl?: unknown };
+  let body: { videoUrl?: unknown; watch?: unknown; unwatch?: unknown };
   try {
     body = (await request.json()) as typeof body;
   } catch {
@@ -54,75 +43,43 @@ export async function POST(request: Request) {
     );
   }
 
-  // Pull top-level comments plus their replies in a single call.
-  const res = await fetch(
-    `${YOUTUBE_API}/commentThreads?part=snippet,replies&maxResults=100&textFormat=plainText&videoId=${videoId}&key=${apiKey}`,
-  );
-  if (!res.ok) {
-    const detail = await res.text();
+  const ws = await currentWorkspaceId();
+
+  // Unwatch: just remove it from the watched list.
+  if (body.unwatch === true) {
+    const videos = await removeWatchedVideo(ws, videoId);
+    return NextResponse.json({ videoId, watched: false, watchedCount: videos.length });
+  }
+
+  let summary: { total: number; fresh: number; analyzed: number; remaining: number };
+  try {
+    summary = await importVideoComments(apiKey, videoId, ws);
+  } catch (error) {
     return NextResponse.json(
-      {
-        error: `YouTube API returned ${res.status}: ${detail.slice(0, 300)}`,
-      },
+      { error: error instanceof Error ? error.message : "YouTube import failed." },
       { status: 502 },
     );
-  }
-  const json = (await res.json()) as {
-    items?: Array<{
-      id?: string;
-      snippet?: { topLevelComment?: { id?: string; snippet?: { authorDisplayName?: string; textDisplay?: string } } };
-      replies?: { comments?: Array<{ id?: string; snippet?: { authorDisplayName?: string; textDisplay?: string } }> };
-    }>;
-  };
-
-  const comments: CommentShape[] = [];
-  for (const thread of json.items ?? []) {
-    const top = thread.snippet?.topLevelComment;
-    if (top?.snippet?.textDisplay) {
-      comments.push({
-        id: top.id ?? `yt:${videoId}:${comments.length}`,
-        author: top.snippet.authorDisplayName ?? "YouTube user",
-        text: top.snippet.textDisplay.trim(),
-      });
-    }
-    for (const reply of thread.replies?.comments ?? []) {
-      if (reply.snippet?.textDisplay) {
-        comments.push({
-          id: reply.id ?? `yt:${videoId}:reply:${comments.length}`,
-          author: reply.snippet.authorDisplayName ?? "YouTube user",
-          text: reply.snippet.textDisplay.trim(),
-        });
-      }
-    }
   }
 
   // A successful import proves YouTube is connected — the connect wizard
   // counts it even if every comment was already seen.
-  const ws = await currentWorkspaceId();
-  waitUntil(
-    recordChannelPing(ws, "youtube").catch(() => undefined),
-  );
-  const fresh = await dedupeSeen(ws, "youtube", comments.map((c) => c.id));
+  waitUntil(recordChannelPing(ws, "youtube").catch(() => undefined));
 
-  // Analysis is the slow part; process as many as fit in a short budget so
-  // the request never times out. Re-running the same URL continues where it
-  // left off because seen ids are remembered.
-  const budgetMs = 20_000;
-  const started = Date.now();
-  let analyzed = 0;
-  for (const id of fresh) {
-    if (Date.now() - started > budgetMs) break;
-    const comment = comments.find((c) => c.id === id);
-    if (!comment) continue;
-    await processIncomingMessage(ws, comment.text, comment.author, "youtube");
-    analyzed += 1;
+  // Watch: remember the video so a scheduled cron keeps checking it.
+  let watched = false;
+  let watchedCount = 0;
+  if (body.watch === true) {
+    const title = await fetchVideoTitle(apiKey, videoId);
+    const videos = await addWatchedVideo(ws, {
+      videoId,
+      title,
+      url: `https://youtube.com/watch?v=${videoId}`,
+      addedAt: new Date().toISOString(),
+      lastCheckedAt: new Date().toISOString(),
+    });
+    watched = true;
+    watchedCount = videos.length;
   }
 
-  return NextResponse.json({
-    videoId,
-    total: comments.length,
-    fresh: fresh.length,
-    analyzed,
-    remaining: fresh.length - analyzed,
-  });
+  return NextResponse.json({ videoId, watched, watchedCount, ...summary });
 }

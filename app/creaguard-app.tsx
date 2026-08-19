@@ -1412,7 +1412,30 @@ function IncidentsView(props: {
   const [videoUrl, setVideoUrl] = useState("");
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
+  const [watchVideo, setWatchVideo] = useState(false);
+  const [watchedVideos, setWatchedVideos] = useState<Array<{
+    videoId: string;
+    title: string;
+    lastCheckedAt?: string;
+  }>>([]);
   const filtered = props.incidents.filter((item) => filter === "all" || item.status === filter);
+
+  async function loadWatched() {
+    try {
+      const res = await fetch("/api/youtube");
+      if (res.ok) {
+        const data = (await res.json()) as { videos?: Array<{ videoId: string; title: string; lastCheckedAt?: string }> };
+        setWatchedVideos(data.videos ?? []);
+      }
+    } catch {
+      // the list is a nice-to-have; never block the page on it
+    }
+  }
+
+  useEffect(() => {
+    loadWatched();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function importVideo() {
     if (!videoUrl.trim() || importing) return;
@@ -1422,25 +1445,41 @@ function IncidentsView(props: {
       const res = await fetch("/api/youtube", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ videoUrl: videoUrl.trim() }),
+        body: JSON.stringify({ videoUrl: videoUrl.trim(), watch: watchVideo }),
       });
       const data = (await res.json()) as {
         error?: string;
         analyzed?: number;
         remaining?: number;
         total?: number;
+        watched?: boolean;
+        watchedCount?: number;
       };
       if (!res.ok) throw new Error(data.error ?? "Failed to import comments.");
       await props.onRefresh();
       const remaining = data.remaining ?? 0;
       setImportMessage(
-        `Analyzed ${data.analyzed ?? 0} of ${data.total ?? 0} comments${remaining > 0 ? ` — ${remaining} still queued, run the import again to continue.` : "."}`,
+        `Analyzed ${data.analyzed ?? 0} of ${data.total ?? 0} comments${remaining > 0 ? ` — ${remaining} still queued, run the import again to continue.` : "."}${data.watched ? " Watching this video for new comments." : ""}`,
       );
       setVideoUrl("");
+      if (data.watched) await loadWatched();
     } catch (err) {
       setImportMessage(err instanceof Error ? err.message : "Failed to import comments.");
     } finally {
       setImporting(false);
+    }
+  }
+
+  async function unwatchVideo(videoId: string) {
+    try {
+      const res = await fetch("/api/youtube", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ videoUrl: `https://youtube.com/watch?v=${videoId}`, unwatch: true }),
+      });
+      if (res.ok) await loadWatched();
+    } catch {
+      // ignore
     }
   }
   return (
@@ -1474,8 +1513,39 @@ function IncidentsView(props: {
         >
           {importing ? "Importing…" : "Import"}
         </button>
+        <label className="cg-watch-toggle">
+          <input
+            type="checkbox"
+            checked={watchVideo}
+            onChange={(event) => setWatchVideo(event.target.checked)}
+          />
+          <span>Keep watching</span>
+          <span className="cg-watch-hint">CreaGuard re-checks it for new comments automatically</span>
+        </label>
       </div>
       {importMessage && <p className="cg-import-result">{importMessage}</p>}
+
+      {watchedVideos.length > 0 && (
+        <div className="cg-watched">
+          <strong>Watching {watchedVideos.length} {watchedVideos.length === 1 ? "video" : "videos"} for new comments</strong>
+          {watchedVideos.map((video) => (
+            <div className="cg-watched-item" key={video.videoId}>
+              <span className="cg-watched-dot" />
+              <a href={`https://youtube.com/watch?v=${video.videoId}`} target="_blank" rel="noreferrer">
+                {video.title}
+              </a>
+              {video.lastCheckedAt && (
+                <span className="cg-watched-checked">
+                  last checked {new Date(video.lastCheckedAt).toLocaleString()}
+                </span>
+              )}
+              <button className="cg-watched-remove" onClick={() => unwatchVideo(video.videoId)} title="Stop watching">
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="cg-filters">
         {[
@@ -1678,11 +1748,18 @@ function SettingsView(props: {
   onManageConnections: () => void;
 }) {
   const [links, setLinks] = useState<Record<string, string | null>>({});
+  const [watchedCount, setWatchedCount] = useState<number | null>(null);
   useEffect(() => {
     void fetch("/api/connect/links", { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : null))
       .then((data: { links?: Record<string, string | null> } | null) => {
         if (data?.links) setLinks(data.links);
+      })
+      .catch(() => undefined);
+    void fetch("/api/youtube", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { videos?: unknown[] } | null) => {
+        if (data?.videos) setWatchedCount(data.videos.length);
       })
       .catch(() => undefined);
   }, []);
@@ -1765,6 +1842,12 @@ function SettingsView(props: {
           );
         })}
       </div>
+
+      {connected.has("youtube") && watchedCount !== null && watchedCount > 0 && (
+        <p className="cg-watched-summary">
+          <span className="cg-watched-dot" /> Watching <strong>{watchedCount}</strong> {watchedCount === 1 ? "video" : "videos"} for new comments automatically
+        </p>
+      )}
 
       <details className="cg-panel cg-advanced">
         <summary>

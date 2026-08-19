@@ -63,6 +63,7 @@ overworked creator.
 | **Decision feedback loop** | Resolve or dismiss with a note and the Mind learns your standard for similar cases. Less human input over time. |
 | **Policy evolution** | The Mind proposes policy updates from your decisions; you approve or reject. It never edits policy on its own. |
 | **Morning digest** | A daily Telegram summary: new cases, repeat offenders, and what's waiting on you. |
+| **Auto-watch (YouTube)** | Toggle **Keep watching** on any video and a scheduled cron re-checks it for new comments — the agent monitors the channel without anyone pasting a URL again. |
 | **Private workspaces** | Sign in (Clerk) and each creator gets an isolated workspace. |
 | **Guided onboarding** | After sign-in, a wizard opens the real channel app for you; the moment you message your bot, CreaGuard detects the connection live. Dashboard shows nothing until a channel is connected — by design. |
 
@@ -147,7 +148,8 @@ creaguard/
 │       ├── connect/links/      # Deep links: bot chat, Discord invite, YouTube
 │       ├── telegram/           # Bot webhook intake
 │       ├── discord/interactions/  # Verified /review slash command
-│       ├── youtube/            # Comment import (deduplicated)
+│       ├── youtube/            # Comment import (deduplicated) + auto-watch list
+│       ├── youtube/watch/      # Autonomous re-check of watched videos (cron)
 │       ├── followups/          # Scheduled autonomous follow-up (cron)
 │       └── digest/             # Morning digest to Telegram (cron)
 ├── lib/
@@ -155,6 +157,7 @@ creaguard/
 │   ├── analyze.ts              # Featherless classification (strict JSON)
 │   ├── risk.ts                 # Deterministic scoring + auto-handling tiers
 │   ├── minds.ts                # Minds relay, reply, decision feedback, proposals
+│   ├── youtube.ts              # Shared YouTube import helpers (parse, title, comments)
 │   ├── suspects.ts             # Cross-platform offender profiles
 │   ├── enforce.ts              # Discord/Telegram ban, timeout, delete
 │   ├── channels.ts             # Telegram decision post-back + digest
@@ -196,7 +199,9 @@ node scripts/setup-telegram.mjs
 #   (invite scopes: bot + applications.commands; permissions: Ban Members,
 #    Moderate Members, Manage Messages)
 
-# YouTube: paste a video URL on the Incidents page (YOUTUBE_API_KEY only)
+# YouTube: paste a video URL on the Incidents page (YOUTUBE_API_KEY only).
+#   Tick "Keep watching" and the cron (every 3h) keeps importing new
+#   comments on its own — no URL needed again.
 ```
 
 ## Environment variables
@@ -228,7 +233,9 @@ node scripts/setup-telegram.mjs
 | `GET` | `/api/connect/links` | Deep links: bot chat, Discord invite, YouTube |
 | `POST` | `/api/telegram` | Telegram bot webhook |
 | `POST` | `/api/discord/interactions` | Discord `/review` (Ed25519 signature-verified) |
-| `POST` | `/api/youtube` | Import + analyze a video's comments (deduplicated) |
+| `POST` | `/api/youtube` | Import + analyze a video's comments; `watch: true` starts auto-watching it |
+| `GET` | `/api/youtube` | Watched videos list |
+| `POST` | `/api/youtube/watch` | Autonomous re-check of watched videos (`CRON_SECRET`, every 3h) |
 | `POST` | `/api/followups` | Scheduled autonomous follow-up (`CRON_SECRET`) |
 | `POST` | `/api/digest` | Morning digest to Telegram (`CRON_SECRET`) |
 

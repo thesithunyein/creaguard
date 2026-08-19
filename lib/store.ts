@@ -9,6 +9,7 @@ import type {
   PolicyProposal,
   Suspect,
   SystemStatus,
+  WatchedVideo,
 } from "./types";
 
 type StorageMode = "redis" | "file" | "memory";
@@ -69,6 +70,9 @@ function connectionsKey(workspaceId: string): string {
 function channelPingsKey(workspaceId: string): string {
   return `creaguard:channelpings:${workspaceId}`;
 }
+function watchedVideosKey(workspaceId: string): string {
+  return `creaguard:watched:${workspaceId}`;
+}
 function incidentsFile(workspaceId: string): string {
   return `incidents-${safeId(workspaceId)}.json`;
 }
@@ -90,6 +94,9 @@ function connectionsFile(workspaceId: string): string {
 function channelPingsFile(workspaceId: string): string {
   return `channelpings-${safeId(workspaceId)}.json`;
 }
+function watchedVideosFile(workspaceId: string): string {
+  return `watched-${safeId(workspaceId)}.json`;
+}
 
 interface MemoryBucket {
   incidents?: Incident[];
@@ -99,6 +106,7 @@ interface MemoryBucket {
   proposals?: PolicyProposal[];
   connections?: Connections;
   channelPings?: Record<ChannelName, string>;
+  watchedVideos?: WatchedVideo[];
 }
 
 function memoryBucket(workspaceId: string): MemoryBucket {
@@ -536,6 +544,82 @@ export async function getChannelPings(
   workspaceId: string,
 ): Promise<Record<ChannelName, string>> {
   return readChannelPings(workspaceId);
+}
+
+async function readWatchedVideos(workspaceId: string): Promise<WatchedVideo[]> {
+  const mode = storageMode();
+  if (mode === "redis") {
+    return (
+      (await redisClient()?.get<WatchedVideo[]>(watchedVideosKey(workspaceId))) ??
+      []
+    );
+  }
+  if (mode === "file") {
+    return (
+      readFileJson<WatchedVideo[] | null>(watchedVideosFile(workspaceId), null) ??
+      []
+    );
+  }
+  return memoryBucket(workspaceId).watchedVideos ?? [];
+}
+
+async function writeWatchedVideos(
+  workspaceId: string,
+  videos: WatchedVideo[],
+): Promise<void> {
+  const mode = storageMode();
+  if (mode === "redis") {
+    await redisClient()?.set(watchedVideosKey(workspaceId), videos);
+    return;
+  }
+  if (mode === "file") {
+    writeFileJson(watchedVideosFile(workspaceId), videos);
+    return;
+  }
+  memoryBucket(workspaceId).watchedVideos = videos;
+}
+
+export async function getWatchedVideos(
+  workspaceId: string,
+): Promise<WatchedVideo[]> {
+  return readWatchedVideos(workspaceId);
+}
+
+export async function addWatchedVideo(
+  workspaceId: string,
+  video: WatchedVideo,
+): Promise<WatchedVideo[]> {
+  const videos = await readWatchedVideos(workspaceId);
+  if (!videos.some((item) => item.videoId === video.videoId)) {
+    videos.unshift(video);
+    await writeWatchedVideos(workspaceId, videos);
+  }
+  return videos;
+}
+
+export async function removeWatchedVideo(
+  workspaceId: string,
+  videoId: string,
+): Promise<WatchedVideo[]> {
+  const videos = await readWatchedVideos(workspaceId);
+  const next = videos.filter((item) => item.videoId !== videoId);
+  if (next.length !== videos.length) {
+    await writeWatchedVideos(workspaceId, next);
+  }
+  return next;
+}
+
+export async function markVideoChecked(
+  workspaceId: string,
+  videoId: string,
+  at = new Date().toISOString(),
+): Promise<void> {
+  const videos = await readWatchedVideos(workspaceId);
+  const index = videos.findIndex((item) => item.videoId === videoId);
+  if (index >= 0) {
+    videos[index].lastCheckedAt = at;
+    await writeWatchedVideos(workspaceId, videos);
+  }
 }
 
 export async function systemStatus(): Promise<SystemStatus> {

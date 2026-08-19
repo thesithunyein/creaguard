@@ -122,3 +122,14 @@ export interface SystemStatus {
     discord: boolean;
   };
 }
+
+/** A YouTube video CreaGuard keeps watching for new comments (auto-watch). */
+export interface WatchedVideo {
+  videoId: string;
+  title: string;
+  url: string;
+  addedAt: string;
+  lastCheckedAt?: string;
+  /** Incident ids created from this video, for dedupe-safe re-imports. */
+  incidentIds?: string[];
+}
