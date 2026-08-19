@@ -54,12 +54,14 @@ export async function processIncomingMessage(
 
   // Cross-platform entity memory: count the author's incidents across ALL
   // platforms (via the suspect profile), not just same-platform events.
+  // +1 includes this incoming incident so a repeat offender's second case
+  // already carries the repetition signal.
   const crossPlatformCount = authorId
     ? await suspectIncidentCount(workspaceId, authorId)
     : 0;
   const repetitionSignal =
     crossPlatformCount > 0
-      ? crossPlatformCount
+      ? crossPlatformCount + 1
       : related.reduce((sum, item) => sum + item.events.length, 0);
 
   const { score, severity } = computeRisk(classification, repetitionSignal);
