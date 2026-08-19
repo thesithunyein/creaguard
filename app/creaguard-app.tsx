@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import {
   SignInButton,
   UserButton,
@@ -16,7 +17,7 @@ import type {
   SystemStatus,
 } from "@/lib/types";
 import { parseRecommendedAction } from "@/lib/minds";
-import { Icon } from "./icons";
+import { BrandIcon, Icon } from "./icons";
 
 type View = "overview" | "incidents" | "policy" | "settings";
 
@@ -479,13 +480,19 @@ export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean 
             <div className="cg-brand">CreaGuard</div>
           </a>
           <nav className="cg-mainnav">
-            {(["overview", "incidents", "policy", "settings"] as View[]).map((item) => (
+            {([
+              { key: "overview", label: "Overview", icon: "home" },
+              { key: "incidents", label: "Incidents", icon: "inbox" },
+              { key: "policy", label: "Policy", icon: "book" },
+              { key: "settings", label: "Settings", icon: "gear" },
+            ] as { key: View; label: string; icon: string }[]).map((item) => (
               <button
-                key={item}
-                className={`cg-mainnav-item ${view === item ? "active" : ""}`}
-                onClick={() => setView(item)}
+                key={item.key}
+                className={`cg-mainnav-item ${view === item.key ? "active" : ""}`}
+                onClick={() => setView(item.key)}
               >
-                {item[0].toUpperCase() + item.slice(1)}
+                <Icon name={item.icon} size={13} />
+                {item.label}
               </button>
             ))}
           </nav>
@@ -560,7 +567,9 @@ export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean 
                 resolved={resolved}
                 loading={loading}
                 noChannels={noChannelsConnected}
+                connections={connections}
                 onConnect={reopenWizard}
+                onManageConnections={reopenWizard}
                 onCompose={() => setComposerOpen(true)}
                 onSelect={setSelectedId}
                 onViewAll={() => setView("incidents")}
@@ -1155,7 +1164,9 @@ function Overview(props: {
   resolved: number;
   loading: boolean;
   noChannels: boolean;
+  connections: Connections;
   onConnect: () => void;
+  onManageConnections: () => void;
   onCompose: () => void;
   onSelect: (id: string) => void;
   onViewAll: () => void;
@@ -1164,15 +1175,20 @@ function Overview(props: {
     <div className="cg-page">
       <section className="cg-hero">
         <div>
-          <div className="cg-eyebrow">CREATOR SAFETY</div>
+          <div className="cg-hero-icon">
+            <Icon name="shield" size={16} />
+            <span>CREATOR SAFETY</span>
+          </div>
           <h1>Protect your space,<br />with context.</h1>
           <p>
             CreaGuard connects threats, doxxing, impersonation, scams, and
             repeated harassment across time — so no safety decision starts from zero.
           </p>
-          <button className="cg-btn primary" onClick={props.onCompose}>
-            Review a message
-          </button>
+          <div className="cg-hero-actions">
+            <button className="cg-btn primary" onClick={props.onCompose}>
+              <Icon name="plus" size={13} /> Review a message
+            </button>
+          </div>
         </div>
         <div className="cg-hero-visual">
           <div className="cg-orbit">
@@ -1244,6 +1260,23 @@ function Overview(props: {
         <StatCard label="Quarantined" value={props.quarantined} icon="eye-off" tone="quarantine" />
         <StatCard label="Resolved" value={props.resolved} icon="check-circle" tone="green" />
       </section>
+
+      <div className="cg-channel-strip">
+        {CHANNEL_META.map((channel) => {
+          const isConnected = props.connections.platforms.includes(channel.key);
+          return (
+            <button
+              key={channel.key}
+              className={`cg-channel-pill ${isConnected ? "ok" : ""}`}
+              onClick={props.onManageConnections}
+            >
+              <BrandIcon name={channel.key} size={15} />
+              <span>{channel.name}</span>
+              <i>{isConnected ? "Connected" : "Not connected"}</i>
+            </button>
+          );
+        })}
+      </div>
 
       <section className="cg-split">
         <div className="cg-panel">
@@ -1340,6 +1373,32 @@ function StatCard(props: { label: string; value: number; icon: string; tone: str
   );
 }
 
+function PageHead(props: {
+  eyebrow: string;
+  title: string;
+  subtitle: string;
+  icon: string;
+  actions?: ReactNode;
+}) {
+  return (
+    <section className="cg-page-head">
+      <div className="cg-page-head-main">
+        <span className="cg-page-head-icon">
+          <Icon name={props.icon} size={17} />
+        </span>
+        <div>
+          <div className="cg-eyebrow">{props.eyebrow}</div>
+          <h1>{props.title}</h1>
+          <p>{props.subtitle}</p>
+        </div>
+      </div>
+      {props.actions && (
+        <div className="cg-page-head-actions">{props.actions}</div>
+      )}
+    </section>
+  );
+}
+
 function IncidentsView(props: {
   incidents: Incident[];
   loading: boolean;
@@ -1386,14 +1445,17 @@ function IncidentsView(props: {
   }
   return (
     <div className="cg-page">
-      <section className="cg-page-head">
-        <div>
-          <div className="cg-eyebrow">CASE MANAGEMENT</div>
-          <h1>Incidents</h1>
-          <p>Every case, with the context CreaGuard remembers.</p>
-        </div>
-        <button className="cg-btn primary" onClick={props.onCompose}>Review a message</button>
-      </section>
+      <PageHead
+        eyebrow="CASE MANAGEMENT"
+        title="Incidents"
+        subtitle="Every case, with the context CreaGuard remembers."
+        icon="inbox"
+        actions={
+          <button className="cg-btn primary" onClick={props.onCompose}>
+            <Icon name="plus" size={13} /> Review a message
+          </button>
+        }
+      />
 
       <div className="cg-import">
         <div className="cg-import-main">
@@ -1493,16 +1555,17 @@ function PolicyView(props: {
   const history = props.proposals.filter((proposal) => proposal.status !== "pending");
   return (
     <div className="cg-page">
-      <section className="cg-page-head">
-        <div>
-          <div className="cg-eyebrow">MEMORY & BOUNDARIES</div>
-          <h1>Safety policy</h1>
-          <p>Teach CreaGuard what protection means to you.</p>
-        </div>
-        <button className="cg-btn primary" onClick={props.onSave} disabled={props.saving}>
-          {props.saving ? "Saving…" : "Save policy"}
-        </button>
-      </section>
+      <PageHead
+        eyebrow="MEMORY & BOUNDARIES"
+        title="Safety policy"
+        subtitle="Teach CreaGuard what protection means to you."
+        icon="book"
+        actions={
+          <button className="cg-btn primary" onClick={props.onSave} disabled={props.saving}>
+            {props.saving ? "Saving…" : "Save policy"}
+          </button>
+        }
+      />
 
       {pending.length > 0 && (
         <div className="cg-panel cg-proposals">
@@ -1660,14 +1723,17 @@ function SettingsView(props: {
 
   return (
     <div className="cg-page">
-      <section className="cg-page-head">
-        <div>
-          <div className="cg-eyebrow">YOUR CHANNELS</div>
-          <h1>Connections</h1>
-          <p>Your channels and what's protected right now.</p>
-        </div>
-        <button className="cg-btn ghost" onClick={props.onRefresh}>Refresh</button>
-      </section>
+      <PageHead
+        eyebrow="YOUR CHANNELS"
+        title="Connections"
+        subtitle="Your channels and what's protected right now."
+        icon="gear"
+        actions={
+          <button className="cg-btn ghost" onClick={props.onRefresh}>
+            <Icon name="refresh" size={13} /> Refresh
+          </button>
+        }
+      />
 
       <div className="cg-panel cg-connections">
         {CHANNEL_META.map((channel) => {
