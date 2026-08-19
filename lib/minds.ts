@@ -199,9 +199,12 @@ export async function fetchMindsReply(
   return fetchMindsReplyForAlias(incidentAlias(incident));
 }
 
-/** Conversation alias for policy-evolution proposals. */
-export function policyAlias(workspaceId: string): string {
-  return `creaguard-policy-${workspaceId}`;
+/**
+ * Conversation alias for a policy-evolution proposal. Unique per request
+ * so a fresh proposal never reads back a stale reply from an earlier one.
+ */
+export function policyAlias(workspaceId: string, nonce: string): string {
+  return `creaguard-policy-${workspaceId}-${nonce}`;
 }
 
 /**
@@ -224,7 +227,10 @@ export async function proposePolicyUpdate(
     const config = mindsConfig();
     if (!config) return { connected: false, error: "Minds is not configured." };
 
-    const alias = policyAlias(workspaceId);
+    const alias = policyAlias(
+      workspaceId,
+      Date.now().toString(36),
+    );
     await client.ensureConversation(alias, config.mindId);
 
     const message = [
@@ -239,6 +245,14 @@ export async function proposePolicyUpdate(
     ].join("\n");
 
     await client.sendMessage({ alias, messageText: message });
+
+    // Minds replies arrive asynchronously, so poll briefly for the
+    // proposal instead of reading once and giving up.
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      const reply = await fetchMindsReplyForAlias(alias);
+      if (reply.reply) return reply;
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
     return fetchMindsReplyForAlias(alias);
   } catch (error) {
     return {
