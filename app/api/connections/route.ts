@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import {
   getConnections,
   getIncidents,
   saveConnections,
 } from "@/lib/store";
-import { currentWorkspaceId } from "@/lib/workspace";
+import { clerkEnabled, currentWorkspaceId } from "@/lib/workspace";
 import type { ChannelName, Connections } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -13,37 +14,55 @@ export const dynamic = "force-dynamic";
 const ALL_CHANNELS: ChannelName[] = ["telegram", "discord", "youtube"];
 
 /**
- * Returns the workspace's connected channels. Auto-detects any channel
- * that has delivered at least one case — if the bot posted an incident,
- * the channel is demonstrably connected, so the wizard flips it to
- * "Connected" without the creator doing anything else.
+ * Connection state is per signed-in user, so a brand-new account starts at
+ * 0/3 and must actually complete each channel's step. Anonymous traffic
+ * (and the shared demo) falls back to the workspace scope.
+ */
+async function connectionsScope(): Promise<string> {
+  if (clerkEnabled()) {
+    try {
+      const { userId } = await auth();
+      if (userId) return `user:${userId}`;
+    } catch {
+      /* fall through to workspace scope */
+    }
+  }
+  return `ws:${await currentWorkspaceId()}`;
+}
+
+/**
+ * Returns the user's connected channels. A channel only counts when a case
+ * from it arrived AFTER the wizard was opened — so pre-existing demo data
+ * never makes a new account look already connected.
  */
 export async function GET() {
-  const ws = await currentWorkspaceId();
-  const connections = await getConnections(ws);
-  const incidents = await getIncidents(ws);
+  const scope = await connectionsScope();
+  const connections = await getConnections(scope);
+  if (!connections.wizardStartedAt) {
+    return NextResponse.json({ connections });
+  }
 
+  const incidents = await getIncidents(await currentWorkspaceId());
+  const startedAt = new Date(connections.wizardStartedAt).getTime();
   const detected = new Set<ChannelName>(connections.platforms);
   for (const incident of incidents) {
     const platform = incident.events.at(-1)?.platform;
     if (
-      platform === "telegram" ||
-      platform === "discord" ||
-      platform === "youtube"
+      (platform === "telegram" ||
+        platform === "discord" ||
+        platform === "youtube") &&
+      new Date(incident.createdAt).getTime() >= startedAt
     ) {
       detected.add(platform);
     }
   }
 
   const updated: Connections = {
+    ...connections,
     platforms: ALL_CHANNELS.filter((channel) => detected.has(channel)),
-    onboardingDone: connections.onboardingDone,
   };
-  if (
-    updated.platforms.length !== connections.platforms.length ||
-    updated.onboardingDone !== connections.onboardingDone
-  ) {
-    await saveConnections(ws, updated);
+  if (updated.platforms.length !== connections.platforms.length) {
+    await saveConnections(scope, updated);
   }
   return NextResponse.json({ connections: updated });
 }
@@ -53,9 +72,10 @@ export async function PUT(request: Request) {
     const body = (await request.json()) as {
       platforms?: unknown;
       onboardingDone?: unknown;
+      wizardStartedAt?: unknown;
     };
-    const ws = await currentWorkspaceId();
-    const current = await getConnections(ws);
+    const scope = await connectionsScope();
+    const current = await getConnections(scope);
 
     let platforms = current.platforms;
     if (Array.isArray(body.platforms)) {
@@ -68,9 +88,17 @@ export async function PUT(request: Request) {
       typeof body.onboardingDone === "boolean"
         ? body.onboardingDone
         : current.onboardingDone;
+    const wizardStartedAt =
+      typeof body.wizardStartedAt === "string"
+        ? body.wizardStartedAt
+        : current.wizardStartedAt;
 
-    const connections: Connections = { platforms, onboardingDone };
-    await saveConnections(ws, connections);
+    const connections: Connections = {
+      platforms,
+      onboardingDone,
+      wizardStartedAt,
+    };
+    await saveConnections(scope, connections);
     return NextResponse.json({ connections });
   } catch {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });

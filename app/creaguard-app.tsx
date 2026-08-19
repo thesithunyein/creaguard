@@ -963,11 +963,17 @@ function ConnectWizard(props: {
   const connected = new Set(props.connections.platforms);
   const allConnected = CHANNEL_META.every((channel) => connected.has(channel.key));
 
-  // Live auto-detection: poll while the wizard is open so the moment a
-  // channel delivers its first case, its card flips to "Connected".
+  // On open, record when the wizard started so only channels that deliver a
+  // NEW case (after this moment) count as connected. Then poll live: the
+  // moment a channel's first case arrives, its card flips to "Connected".
   useEffect(() => {
     let cancelled = false;
-    async function poll() {
+    async function start() {
+      await fetch("/api/connections", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wizardStartedAt: new Date().toISOString() }),
+      }).catch(() => undefined);
       for (let attempt = 0; attempt < 40 && !cancelled; attempt += 1) {
         try {
           const res = await fetch("/api/connections", { cache: "no-store" });
@@ -981,7 +987,7 @@ function ConnectWizard(props: {
         await new Promise((resolve) => setTimeout(resolve, 3000));
       }
     }
-    void poll();
+    void start();
     return () => {
       cancelled = true;
     };

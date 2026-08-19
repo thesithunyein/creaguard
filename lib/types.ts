@@ -108,6 +108,8 @@ export interface Connections {
   platforms: ChannelName[];
   /** True once the creator has finished (or skipped) the connect wizard. */
   onboardingDone: boolean;
+  /** When the wizard was opened, so channels only count if a case arrives after. */
+  wizardStartedAt?: string;
 }
 
 export interface SystemStatus {
