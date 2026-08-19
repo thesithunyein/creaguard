@@ -2053,6 +2053,40 @@ img {
   padding: 8px 10px;
 }
 
+.cg-connection-action {
+  flex: none;
+  margin-left: 14px;
+}
+
+.cg-advanced {
+  margin-bottom: 20px;
+}
+
+.cg-advanced summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 14px 18px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  list-style: none;
+}
+
+.cg-advanced summary::-webkit-details-marker {
+  display: none;
+}
+
+.cg-advanced[open] summary {
+  border-bottom: 1px solid var(--border);
+}
+
+.cg-advanced .cg-connections {
+  padding: 6px 0;
+}
+
 .cg-connect-actions {
   display: flex;
   justify-content: center;

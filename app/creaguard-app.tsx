@@ -598,6 +598,7 @@ export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean 
         {view === "settings" && (
           <SettingsView
             status={status}
+            connections={connections}
             onRefresh={refresh}
             onManageConnections={reopenWizard}
           />
@@ -1609,10 +1610,22 @@ function PolicyView(props: {
 
 function SettingsView(props: {
   status: SystemStatus | null;
+  connections: Connections;
   onRefresh: () => void;
   onManageConnections: () => void;
 }) {
-  const rows = [
+  const [links, setLinks] = useState<Record<string, string | null>>({});
+  useEffect(() => {
+    void fetch("/api/connect/links", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { links?: Record<string, string | null> } | null) => {
+        if (data?.links) setLinks(data.links);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  const connected = new Set(props.connections.platforms);
+  const systemRows = [
     {
       label: "Upstash Redis",
       detail: props.status ? (props.status.storage === "redis" ? "Connected" : `Using ${props.status.storage} store`) : "Checking…",
@@ -1632,18 +1645,6 @@ function SettingsView(props: {
       hint: "Set MINDS_BUILDER_API_KEY and MINDS_MIND_ID to relay cases to your Mind.",
     },
     {
-      label: "Telegram bot",
-      detail: props.status?.channels.telegram ? "Connected" : "Not configured",
-      ok: Boolean(props.status?.channels.telegram),
-      hint: "Set TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_SECRET, then run scripts/setup-telegram.mjs.",
-    },
-    {
-      label: "YouTube import",
-      detail: props.status?.channels.youtube ? "Connected" : "Not configured",
-      ok: Boolean(props.status?.channels.youtube),
-      hint: "Set YOUTUBE_API_KEY, then paste a video link on the Incidents page.",
-    },
-    {
       label: "Scheduled follow-up",
       detail: "Daily 09:00 UTC",
       ok: true,
@@ -1661,28 +1662,62 @@ function SettingsView(props: {
     <div className="cg-page">
       <section className="cg-page-head">
         <div>
-          <div className="cg-eyebrow">WORKSPACE SETTINGS</div>
+          <div className="cg-eyebrow">YOUR CHANNELS</div>
           <h1>Connections</h1>
-          <p>Connect the real services that power CreaGuard.</p>
+          <p>Your channels and what's protected right now.</p>
         </div>
-        <button className="cg-btn ghost" onClick={props.onManageConnections}>
-          <Icon name="send" size={14} /> Manage connections
-        </button>
         <button className="cg-btn ghost" onClick={props.onRefresh}>Refresh</button>
       </section>
 
       <div className="cg-panel cg-connections">
-        {rows.map((row) => (
-          <div className="cg-connection" key={row.label}>
-            <span className={`cg-conn-dot ${row.ok ? "ok" : ""}`} />
-            <div className="cg-connection-main">
-              <strong>{row.label}</strong>
-              <p>{row.detail}</p>
+        {CHANNEL_META.map((channel) => {
+          const isConnected = connected.has(channel.key);
+          return (
+            <div className="cg-connection" key={channel.key}>
+              <span className={`cg-conn-dot ${isConnected ? "ok" : ""}`} />
+              <div className="cg-connection-main">
+                <strong>{channel.name}</strong>
+                <p>{isConnected ? "Connected — CreaGuard is watching this channel." : "Not connected"}</p>
+              </div>
+              <div className="cg-connection-hint">{channel.hint}</div>
+              {isConnected ? (
+                <button
+                  className="cg-btn ghost cg-connection-action"
+                  onClick={() => links[channel.key] && window.open(links[channel.key]!, "_blank", "noopener,noreferrer")}
+                >
+                  Open
+                </button>
+              ) : (
+                <button
+                  className="cg-btn primary cg-connection-action"
+                  onClick={props.onManageConnections}
+                >
+                  Connect now
+                </button>
+              )}
             </div>
-            <div className="cg-connection-hint">{row.hint}</div>
-          </div>
-        ))}
+          );
+        })}
       </div>
+
+      <details className="cg-panel cg-advanced">
+        <summary>
+          <span>System status (for developers)</span>
+          <Icon name="clock" size={14} />
+        </summary>
+        <div className="cg-connections">
+          {systemRows.map((row) => (
+            <div className="cg-connection" key={row.label}>
+              <span className={`cg-conn-dot ${row.ok ? "ok" : ""}`} />
+              <div className="cg-connection-main">
+                <strong>{row.label}</strong>
+                <p>{row.detail}</p>
+              </div>
+              <div className="cg-connection-hint">{row.hint}</div>
+            </div>
+          ))}
+        </div>
+      </details>
 
       <div className="cg-panel cg-security">
         <div className="cg-panel-head">
