@@ -2060,6 +2060,42 @@ img {
   margin-top: 26px;
 }
 
+.cg-connect-actions-center {
+  margin-top: 34px;
+}
+
+.cg-connect-cta {
+  min-width: 180px;
+  font-size: 14px;
+  padding: 12px 24px;
+}
+
+.cg-connect-card {
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+  width: 100%;
+}
+
+.cg-connect-card.active {
+  border-color: rgba(139, 92, 246, 0.6);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
+}
+
+.cg-connect-waiting {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--violet);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(139, 92, 246, 0.08);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
 /* Alert + toast */
 .cg-alert {
   display: flex;

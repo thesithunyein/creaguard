@@ -240,10 +240,10 @@ export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean 
     };
   }, [selectedId, mindsReload]);
 
-  // Show only incidents from connected channels (plus manual cases). With
-  // zero channels connected there is nothing to filter by, so show all.
+  // Show only incidents from connected channels. With zero channels
+  // connected the dashboard is empty — a creator must connect before any
+  // data appears (that's the point of the connect flow).
   const visibleIncidents = useMemo(() => {
-    if (connections.platforms.length === 0) return incidents;
     const connected = new Set<ChannelName>(connections.platforms);
     return incidents.filter((item) => {
       const platform = item.events.at(-1)?.platform;
@@ -254,6 +254,8 @@ export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean 
       );
     });
   }, [incidents, connections.platforms]);
+  const noChannelsConnected =
+    connections.onboardingDone && connections.platforms.length === 0;
 
   const needsReview = visibleIncidents.filter((item) => item.status === "needs_review").length;
   const monitoring = visibleIncidents.filter((item) => item.status === "monitoring").length;
@@ -438,6 +440,14 @@ export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean 
     }
   }
 
+  const reopenWizard = useCallback(() => {
+    void fetch("/api/connections", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ onboardingDone: false }),
+    }).then(() => refresh());
+  }, [refresh]);
+
   async function savePolicyNow() {
     setPolicySaving(true);
     try {
@@ -549,6 +559,8 @@ export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean 
                 quarantined={quarantined}
                 resolved={resolved}
                 loading={loading}
+                noChannels={noChannelsConnected}
+                onConnect={reopenWizard}
                 onCompose={() => setComposerOpen(true)}
                 onSelect={setSelectedId}
                 onViewAll={() => setView("incidents")}
@@ -559,6 +571,8 @@ export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean 
               <IncidentsView
                 incidents={visibleIncidents}
                 loading={loading}
+                noChannels={noChannelsConnected}
+                onConnect={reopenWizard}
                 onSelect={setSelectedId}
                 onCompose={() => setComposerOpen(true)}
                 onRefresh={refresh}
@@ -585,13 +599,7 @@ export function CreaGuardApp({ clerkEnabled = false }: { clerkEnabled?: boolean 
           <SettingsView
             status={status}
             onRefresh={refresh}
-            onManageConnections={() => {
-              void fetch("/api/connections", {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ onboardingDone: false }),
-              }).then(() => refresh());
-            }}
+            onManageConnections={reopenWizard}
           />
         )}
       </main>
@@ -960,8 +968,11 @@ function ConnectWizard(props: {
   onFinish: (skip: boolean) => void;
   onDetected: (platforms: ChannelName[]) => void;
 }) {
+  const [stage, setStage] = useState<"intro" | "channels">("intro");
+  const [active, setActive] = useState<ChannelName | null>(null);
   const connected = new Set(props.connections.platforms);
   const allConnected = CHANNEL_META.every((channel) => connected.has(channel.key));
+  const anyConnected = connected.size > 0;
 
   // On open, record when the wizard started so only channels that deliver a
   // NEW case (after this moment) count as connected. Then poll live: the
@@ -992,67 +1003,104 @@ function ConnectWizard(props: {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  return (
+  }, []);  return (
     <div className="cg-page cg-connect">
-      <section className="cg-connect-head">
-        <div className="cg-eyebrow">SETUP IN 2 MINUTES</div>
-        <h1>Connect your channels</h1>
-        <p>
-          CreaGuard watches the places your community talks to you — up to 3:
-          Telegram, Discord, and YouTube. Connect one or all; your dashboard
-          shows only the channels you've connected.
-        </p>
-        <div className="cg-connect-count">
-          {connected.size}/3 connected
-        </div>
-      </section>
-
-      <div className="cg-connect-grid">
-        {CHANNEL_META.map((channel) => {
-          const isConnected = connected.has(channel.key);
-          const configured = channel.configOk(props.status);
-          return (
-            <div
-              key={channel.key}
-              className={`cg-connect-card ${isConnected ? "connected" : ""}`}
-            >
-              <div className="cg-connect-card-head">
-                <span className="cg-connect-icon">
-                  <Icon name={channel.icon} size={16} />
-                </span>
-                <div>
-                  <strong>{channel.name}</strong>
-                  <p>{channel.hint}</p>
-                </div>
-                <span className={`cg-connect-status ${isConnected ? "ok" : ""}`}>
-                  {isConnected ? "✓ Connected" : "Not connected"}
-                </span>
-              </div>
-              <p className="cg-connect-step">{channel.step}</p>
-              {!configured && (
-                <p className="cg-connect-config-note">
-                  ⚠️ {channel.configLabel} isn't configured on the server yet —
-                  add its API key, then refresh this page.
-                </p>
-              )}
+      {stage === "intro" ? (
+        <>
+          <section className="cg-connect-head">
+            <div className="cg-eyebrow">SETUP IN 2 MINUTES</div>
+            <h1>Connect your channels</h1>
+            <p>
+              CreaGuard watches the places your community talks to you — up to 3:
+              Telegram, Discord, and YouTube. Connect one or all; your dashboard
+              shows only the channels you've connected.
+            </p>
+            <div className="cg-connect-count">
+              {connected.size}/3 connected
             </div>
-          );
-        })}
-      </div>
+          </section>
+          <div className="cg-connect-actions cg-connect-actions-center">
+            <button className="cg-btn ghost" onClick={() => props.onFinish(true)}>
+              Skip for now
+            </button>
+            <button
+              className="cg-btn primary cg-connect-cta"
+              onClick={() => setStage("channels")}
+            >
+              Connect now
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <section className="cg-connect-head">
+            <div className="cg-eyebrow">CHOOSE A CHANNEL</div>
+            <h1>Pick where to connect first</h1>
+            <p>
+              Tap a channel, complete its step — CreaGuard detects it live and
+              marks it connected. You can add the rest anytime.
+            </p>
+            <div className="cg-connect-count">
+              {connected.size}/3 connected
+            </div>
+          </section>
 
-      <div className="cg-connect-actions">
-        <button className="cg-btn ghost" onClick={() => props.onFinish(true)}>
-          Skip for now
-        </button>
-        <button
-          className="cg-btn primary"
-          onClick={() => props.onFinish(false)}
-        >
-          {allConnected ? "Finish — you're protected" : "Continue to dashboard"}
-        </button>
-      </div>
+          <div className="cg-connect-grid">
+            {CHANNEL_META.map((channel) => {
+              const isConnected = connected.has(channel.key);
+              const configured = channel.configOk(props.status);
+              const isActive = active === channel.key;
+              return (
+                <button
+                  key={channel.key}
+                  className={`cg-connect-card ${isConnected ? "connected" : ""} ${isActive ? "active" : ""}`}
+                  onClick={() => !isConnected && setActive(channel.key)}
+                >
+                  <div className="cg-connect-card-head">
+                    <span className="cg-connect-icon">
+                      <Icon name={channel.icon} size={16} />
+                    </span>
+                    <div>
+                      <strong>{channel.name}</strong>
+                      <p>{channel.hint}</p>
+                    </div>
+                    <span className={`cg-connect-status ${isConnected ? "ok" : ""}`}>
+                      {isConnected ? "✓ Connected" : "Connect"}
+                    </span>
+                  </div>
+                  <p className="cg-connect-step">{channel.step}</p>
+                  {isActive && !isConnected && (
+                    <p className="cg-connect-waiting">
+                      <span className="cg-minds-spinner" />
+                      Waiting for your {channel.name} message — CreaGuard
+                      detects it automatically.
+                    </p>
+                  )}
+                  {!configured && !isConnected && (
+                    <p className="cg-connect-config-note">
+                      ⚠️ {channel.configLabel} isn't configured on the server
+                      yet — add its API key, then refresh this page.
+                    </p>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="cg-connect-actions">
+            <button className="cg-btn ghost" onClick={() => setStage("intro")}>
+              Back
+            </button>
+            <button
+              className="cg-btn primary"
+              disabled={!anyConnected}
+              onClick={() => props.onFinish(false)}
+            >
+              {anyConnected ? "Finish — you're protected" : "Connect at least one channel first"}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -1064,6 +1112,8 @@ function Overview(props: {
   quarantined: number;
   resolved: number;
   loading: boolean;
+  noChannels: boolean;
+  onConnect: () => void;
   onCompose: () => void;
   onSelect: (id: string) => void;
   onViewAll: () => void;
@@ -1099,33 +1149,48 @@ function Overview(props: {
         <section className="cg-onboard">
           <div className="cg-onboard-head">
             <div className="cg-eyebrow">GET STARTED</div>
-            <h2>Protect your space in three steps</h2>
+            <h2>{props.noChannels ? "Connect your channels first" : "Protect your space in three steps"}</h2>
           </div>
-          <div className="cg-onboard-steps">
-            <div className="cg-onboard-step">
-              <span>1</span>
-              <div>
-                <strong>Paste a message</strong>
-                <p>Review one message now to see the whole flow.</p>
+          {props.noChannels ? (
+            <div className="cg-onboard-steps">
+              <div className="cg-onboard-step">
+                <span>1</span>
+                <div>
+                  <strong>Connect Telegram, Discord, or YouTube</strong>
+                  <p>Your dashboard is empty until at least one channel is connected — that's on purpose.</p>
+                </div>
               </div>
             </div>
-            <div className="cg-onboard-step">
-              <span>2</span>
-              <div>
-                <strong>Watch it get analyzed</strong>
-                <p>Risk score and category in seconds — no keyword filters.</p>
+          ) : (
+            <div className="cg-onboard-steps">
+              <div className="cg-onboard-step">
+                <span>1</span>
+                <div>
+                  <strong>Paste a message</strong>
+                  <p>Review one message now to see the whole flow.</p>
+                </div>
+              </div>
+              <div className="cg-onboard-step">
+                <span>2</span>
+                <div>
+                  <strong>Watch it get analyzed</strong>
+                  <p>Risk score and category in seconds — no keyword filters.</p>
+                </div>
+              </div>
+              <div className="cg-onboard-step">
+                <span>3</span>
+                <div>
+                  <strong>Your Mind reviews, you approve</strong>
+                  <p>The Mind drafts the call; you make the decision.</p>
+                </div>
               </div>
             </div>
-            <div className="cg-onboard-step">
-              <span>3</span>
-              <div>
-                <strong>Your Mind reviews, you approve</strong>
-                <p>The Mind drafts the call; you make the decision.</p>
-              </div>
-            </div>
-          </div>
-          <button className="cg-btn primary" onClick={props.onCompose}>
-            Review your first message
+          )}
+          <button
+            className="cg-btn primary"
+            onClick={props.noChannels ? props.onConnect : props.onCompose}
+          >
+            {props.noChannels ? "Connect now" : "Review your first message"}
           </button>
         </section>
       )}
@@ -1236,6 +1301,8 @@ function StatCard(props: { label: string; value: number; icon: string; tone: str
 function IncidentsView(props: {
   incidents: Incident[];
   loading: boolean;
+  noChannels: boolean;
+  onConnect: () => void;
   onSelect: (id: string) => void;
   onCompose: () => void;
   onRefresh: () => Promise<void>;
@@ -1328,6 +1395,12 @@ function IncidentsView(props: {
       <div className="cg-panel cg-table-panel">
         {props.loading ? (
           <div className="cg-empty">Loading cases…</div>
+        ) : props.noChannels ? (
+          <div className="cg-empty">
+            <strong>No channels connected yet</strong>
+            <p>Connect Telegram, Discord, or YouTube — cases from connected channels appear here.</p>
+            <button className="cg-btn primary" onClick={props.onConnect}>Connect now</button>
+          </div>
         ) : filtered.length === 0 ? (
           <div className="cg-empty">
             <strong>No cases in this view</strong>
